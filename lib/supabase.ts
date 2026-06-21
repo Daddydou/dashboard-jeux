@@ -12,6 +12,8 @@ export type Game = {
   actif: boolean
   created_at: string
   dernier_ouvert: string | null
+  notes: string | null
+  source_type: string | null
 }
 
 export const supabase = createClient(
