@@ -129,8 +129,9 @@ export default function Home() {
       if (prevSourceType !== nextSourceType) {
         statusFetched.current.delete(editingGame.id)
         setStatuses(prev => {
-          const { [editingGame.id]: _removed, ...rest } = prev
-          return rest
+          const next = { ...prev }
+          delete next[editingGame.id]
+          return next
         })
       }
 
