@@ -14,6 +14,15 @@ export type Game = {
   dernier_ouvert: string | null
   notes: string | null
   source_type: string | null
+  // Feature B
+  reset_heure: string | null
+  // Feature C
+  notif_active: boolean
+  notif_debut: string | null
+  notif_fin: string | null
+  notif_frequence: string | null
+  notif_heure: string | null
+  last_notif_sent_at: string | null
 }
 
 export const supabase = createClient(
