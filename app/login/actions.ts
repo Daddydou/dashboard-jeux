@@ -35,12 +35,12 @@ export async function seConnecter(data: FormData): Promise<void> {
     redirect(`/login?${echec}`);
   }
 
-  cookies().set(COOKIE_NAME, await creerJeton(), optionsCookie());
+  (await cookies()).set(COOKIE_NAME, await creerJeton(), optionsCookie());
 
   redirect(next);
 }
 
 export async function seDeconnecter(): Promise<void> {
-  cookies().delete(COOKIE_NAME);
+  (await cookies()).delete(COOKIE_NAME);
   redirect('/login');
 }

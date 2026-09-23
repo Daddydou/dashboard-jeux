@@ -4,12 +4,13 @@ import { sessionValide } from '@/auth/garde';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: { next?: string; erreur?: string };
-}) {
-  // Le middleware laisse /login passer sans cookie : c'est ici qu'on renvoie
+export default async function LoginPage(
+  props: {
+    searchParams: Promise<{ next?: string; erreur?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  // Le proxy laisse /login passer sans cookie : c'est ici qu'on renvoie
   // un visiteur déjà connecté vers l'app.
   if (await sessionValide()) redirect('/');
 

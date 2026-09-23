@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { NextRequest } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  // Le middleware filtre déjà /api, mais la garde applicative reste la
+  // Le proxy filtre déjà /api, mais la garde applicative reste la
   // ligne de défense qui compte (cf. auth/garde.ts).
   if (!(await sessionValide())) {
     return Response.json({ error: 'Non authentifié.' }, { status: 401 })

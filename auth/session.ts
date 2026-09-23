@@ -7,11 +7,11 @@
  * modifiable par le client (contrairement au `Max-Age` du cookie).
  *
  * Module volontairement sans `next/headers` : il doit rester importable
- * depuis `middleware.ts`, qui s'exécute avant le rendu.
+ * depuis `proxy.ts`, qui s'exécute avant le rendu.
  *
- * ⚠ Next 14 : le middleware tourne sur le runtime Edge, sans `node:crypto`.
- * On utilise donc Web Crypto (`crypto.subtle`), disponible en Edge comme en
- * Node — d'où des fonctions asynchrones, contrairement à la version Tennis.
+ * Écrit pour le runtime Edge du middleware de Next 14 (sans `node:crypto`) :
+ * Web Crypto (`crypto.subtle`), qui reste valable avec le proxy Node de
+ * Next 16 — d'où des fonctions asynchrones, contrairement à la version Tennis.
  */
 
 export const COOKIE_NAME = 'dj_session';

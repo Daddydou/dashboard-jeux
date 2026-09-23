@@ -2,15 +2,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE_NAME, verifierJeton } from '@/auth/session';
 
 /**
- * Porte d'entrée : tout est privé sauf /login (équivalent du `proxy.ts` de
- * Next 16 ; en Next 14 il s'appelle `middleware.ts` et tourne en Edge).
+ * Porte d'entrée : tout est privé sauf /login (ex-`middleware.ts` de Next 14,
+ * renommé `proxy.ts` en Next 16, qui le fait tourner en Node).
  *
- * ⚠ Le middleware ne remplace pas les contrôles applicatifs : les Server
+ * ⚠ Le proxy ne remplace pas les contrôles applicatifs : les Server
  * Actions sont des POST vers la route qui les héberge, pas des routes
  * distinctes. Les écritures re-vérifient donc la session de leur côté
  * (`auth/garde.ts`).
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (pathname === '/login') return NextResponse.next();
