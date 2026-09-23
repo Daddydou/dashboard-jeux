@@ -6,6 +6,16 @@ import type { Game } from '@/lib/supabase'
 import type { GameStatus } from '@/lib/status/types'
 import { fetchCdm26PicksStatus } from '@/lib/status/cdm26Picks'
 import { fetchCdm26FantasyStatus } from '@/lib/status/cdm26Fantasy'
+import {
+  basculerFait,
+  creerJeu,
+  enregistrerNotif,
+  marquerOuvert,
+  modifierJeu,
+  reordonner,
+  supprimerJeu,
+} from './actions'
+import { seDeconnecter } from './login/actions'
 
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -130,6 +140,14 @@ export default function Home() {
     })
   }, [games])
 
+  // Écriture refusée (session expirée, erreur réseau…) : on prévient et on
+  // resynchronise l'affichage optimiste avec la base.
+  function surEchecEcriture(err: unknown) {
+    console.error('Écriture refusée :', err)
+    alert('Enregistrement impossible (session expirée ?). Rechargement des données.')
+    loadGames()
+  }
+
   async function loadGames() {
     const [gamesRes, doneRes] = await Promise.all([
       supabase
@@ -169,15 +187,12 @@ export default function Home() {
   }
 
   async function handleCheck(game: Game, checked: boolean) {
-    if (checked) {
-      const doneAt = new Date().toISOString()
+    setDoneMap(prev => ({ ...prev, [game.id]: checked ? new Date().toISOString() : null }))
+    try {
+      const doneAt = await basculerFait(game.id, checked)
       setDoneMap(prev => ({ ...prev, [game.id]: doneAt }))
-      await supabase
-        .from('dashboard_done')
-        .upsert({ game_id: game.id, done_at: doneAt }, { onConflict: 'game_id' })
-    } else {
-      setDoneMap(prev => ({ ...prev, [game.id]: null }))
-      await supabase.from('dashboard_done').delete().eq('game_id', game.id)
+    } catch (err) {
+      surEchecEcriture(err)
     }
   }
 
@@ -222,19 +237,12 @@ export default function Home() {
 
   async function handleNotifSave() {
     if (!notifModalGame) return
-    const { data } = await supabase
-      .from('dashboard_games')
-      .update({
-        notif_active: notifForm.notif_active,
-        notif_debut: notifForm.notif_debut || null,
-        notif_fin: notifForm.notif_fin || null,
-        notif_frequence: notifForm.notif_frequence || null,
-        notif_heure: notifForm.notif_heure || null,
-      })
-      .eq('id', notifModalGame.id)
-      .select()
-      .single()
-    if (data) setGames(prev => prev.map(g => g.id === notifModalGame.id ? data as Game : g))
+    try {
+      const data = await enregistrerNotif(notifModalGame.id, notifForm)
+      setGames(prev => prev.map(g => g.id === notifModalGame.id ? data : g))
+    } catch (err) {
+      surEchecEcriture(err)
+    }
     setNotifModalGame(null)
   }
 
@@ -262,63 +270,41 @@ export default function Home() {
 
   async function handleDelete(game: Game) {
     if (!confirm(`Supprimer "${game.nom}" ?`)) return
-    await supabase.from('dashboard_games').delete().eq('id', game.id)
-    setGames(prev => prev.filter(g => g.id !== game.id))
+    try {
+      await supprimerJeu(game.id)
+      setGames(prev => prev.filter(g => g.id !== game.id))
+    } catch (err) {
+      surEchecEcriture(err)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
 
-    if (editingGame) {
-      const prevSourceType = editingGame.source_type ?? ''
-      const nextSourceType = form.source_type
-      if (prevSourceType !== nextSourceType) {
-        statusFetched.current.delete(editingGame.id)
-        setStatuses(prev => {
-          const next = { ...prev }
-          delete next[editingGame.id]
-          return next
-        })
+    try {
+      if (editingGame) {
+        const prevSourceType = editingGame.source_type ?? ''
+        const nextSourceType = form.source_type
+        if (prevSourceType !== nextSourceType) {
+          statusFetched.current.delete(editingGame.id)
+          setStatuses(prev => {
+            const next = { ...prev }
+            delete next[editingGame.id]
+            return next
+          })
+        }
+  
+        const data = await modifierJeu(editingGame.id, form)
+        setGames(prev => prev.map(g => g.id === editingGame.id ? data : g))
+      } else {
+        const data = await creerJeu(form)
+        setGames(prev => [...prev, data])
       }
-
-      const { data } = await supabase
-        .from('dashboard_games')
-        .update({
-          nom: form.nom,
-          url: form.url,
-          description: form.description || null,
-          emoji: form.emoji || null,
-          categorie: form.categorie || null,
-          couleur: form.couleur || null,
-          notes: form.notes || null,
-          source_type: form.source_type || null,
-          reset_heure: form.reset_heure || null,
-        })
-        .eq('id', editingGame.id)
-        .select()
-        .single()
-      if (data) setGames(prev => prev.map(g => g.id === editingGame.id ? data as Game : g))
-    } else {
-      const maxOrdre = games.reduce((m, g) => Math.max(m, g.ordre ?? 0), 0)
-      const { data } = await supabase
-        .from('dashboard_games')
-        .insert({
-          nom: form.nom,
-          url: form.url,
-          description: form.description || null,
-          emoji: form.emoji || null,
-          categorie: form.categorie || null,
-          couleur: form.couleur || null,
-          notes: form.notes || null,
-          source_type: form.source_type || null,
-          reset_heure: form.reset_heure || null,
-          ordre: maxOrdre + 1,
-          actif: true,
-        })
-        .select()
-        .single()
-      if (data) setGames(prev => [...prev, data as Game])
+    } catch (err) {
+      setSubmitting(false)
+      surEchecEcriture(err)
+      return
     }
 
     setSubmitting(false)
@@ -327,8 +313,9 @@ export default function Home() {
 
   async function handleLinkClick(game: Game) {
     const now = new Date().toISOString()
-    supabase.from('dashboard_games').update({ dernier_ouvert: now }).eq('id', game.id)
     setGames(prev => prev.map(g => g.id === game.id ? { ...g, dernier_ouvert: now } : g))
+    // Pas d'alerte ici : l'utilisateur vient de quitter l'onglet pour le jeu.
+    marquerOuvert(game.id).catch(err => console.error('dernier_ouvert non enregistré :', err))
   }
 
   async function handleDrop(e: React.DragEvent, category: string, targetId: string) {
@@ -360,9 +347,11 @@ export default function Home() {
     setDraggedId(null)
     setDragOverId(null)
 
-    await Promise.all(
-      updates.map(u => supabase.from('dashboard_games').update({ ordre: u.ordre }).eq('id', u.id))
-    )
+    try {
+      await reordonner(updates)
+    } catch (err) {
+      surEchecEcriture(err)
+    }
   }
 
   function toggleNotes(gameId: string) {
@@ -412,6 +401,15 @@ export default function Home() {
           >
             + Ajouter
           </button>
+          <form action={seDeconnecter}>
+            <button
+              type="submit"
+              title="Se déconnecter"
+              className="bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-2xl text-sm text-slate-300"
+            >
+              ⎋
+            </button>
+          </form>
         </div>
       </header>
 

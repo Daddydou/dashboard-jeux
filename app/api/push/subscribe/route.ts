@@ -1,12 +1,14 @@
-import { createClient } from '@supabase/supabase-js'
+import { sessionValide } from '@/auth/garde'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { NextRequest } from 'next/server'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 export async function POST(req: NextRequest) {
+  // Le middleware filtre déjà /api, mais la garde applicative reste la
+  // ligne de défense qui compte (cf. auth/garde.ts).
+  if (!(await sessionValide())) {
+    return Response.json({ error: 'Non authentifié.' }, { status: 401 })
+  }
+
   const body = await req.json() as {
     endpoint: string
     keys?: { p256dh: string; auth: string }
@@ -16,7 +18,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing endpoint or keys' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin()
     .from('dashboard_push_subscriptions')
     .upsert(
       { endpoint: body.endpoint, keys: body.keys },

@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import webpush from 'web-push'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 type GameRow = {
   id: string
@@ -35,6 +30,10 @@ export async function GET(req: Request) {
     return Response.json({ error: 'VAPID keys not configured' }, { status: 500 })
   }
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
+
+  // Service-role : la clé publique n'a plus le droit d'écrire, ni de lire les
+  // abonnements push. Protégé par CRON_SECRET ci-dessus.
+  const supabase = supabaseAdmin()
 
   const now = new Date()
   const todayStr = now.toISOString().split('T')[0]
