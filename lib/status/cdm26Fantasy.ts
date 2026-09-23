@@ -1,8 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { GameStatus } from './types'
-
-// display_name dans fantasy_participants — ajuster si différent
-const MY_DISPLAY_NAME = 'DaddyKvaratskhelia'
+import { MON_PSEUDO } from '@/lib/constants'
 
 type FantasyRpcResult =
   | { rank: number; points: number }
@@ -11,7 +9,7 @@ type FantasyRpcResult =
 export async function fetchCdm26FantasyStatus(): Promise<GameStatus> {
   try {
     const { data, error } = await supabase.rpc('get_dashboard_fantasy_status', {
-      p_display_name: MY_DISPLAY_NAME,
+      p_display_name: MON_PSEUDO,
     })
 
     if (error) return { state: 'error' }

@@ -1,7 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { GameStatus } from './types'
-
-const MY_USERNAME = 'DaddyKvaratskhelia'
+import { MON_PSEUDO } from '@/lib/constants'
 
 type PicksFullRpcResult =
   | {
@@ -16,7 +15,7 @@ type PicksFullRpcResult =
 export async function fetchCdm26PicksStatus(): Promise<GameStatus> {
   try {
     const { data, error } = await supabase.rpc('get_dashboard_picks_full', {
-      p_username: MY_USERNAME,
+      p_username: MON_PSEUDO,
     })
 
     if (error) return { state: 'error' }
