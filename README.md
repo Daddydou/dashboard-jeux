@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎲 Dashboard jeux
 
-## Getting Started
+Lanceur personnel de mes applis-jeux (fantasy, pronostics, échecs, tennis…).
+Une page, une carte par jeu, rangées par catégorie :
 
-First, run the development server:
+- **lien direct** vers le jeu, avec la date de dernière ouverture ;
+- **coche « Fait »** qui se réinitialise toute seule chaque jour à une heure
+  choisie par jeu ;
+- **notes / mémo** par jeu (room code, identifiant, phase…) ;
+- **statut dynamique** pour certains jeux (classement et picks à faire sur
+  CDM26 Picks / CDM26 Fantasy) ;
+- **rappels par notification push**, à heure fixe, quotidiens ou hebdo ;
+- réorganisation des cartes par **glisser-déposer**.
+
+Outil mono-utilisateur, protégé par un mot de passe unique. Installable sur
+téléphone (PWA).
+
+## Stack
+
+- **Next.js 16** (App Router, Turbopack) + **React 19**, TypeScript, Tailwind CSS
+- **Supabase** (Postgres) pour les données
+- **PWA** : `public/manifest.json` + service worker `public/sw.js` (réception des push)
+- **web-push** (clés VAPID) pour envoyer les notifications
+- Déploiement sur **Vercel** ; déclenchement des notifications par **cron-job.org**
+
+## Organisation du code
+
+| Chemin | Rôle |
+|---|---|
+| `app/page.tsx` | Page principale : état, chargement des jeux, écritures |
+| `components/` | `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
+| `app/actions.ts` | Server Actions : toutes les écritures Supabase |
+| `app/login/` | Page et actions de connexion / déconnexion |
+| `auth/` | Cookie de session signé (`session.ts`) et garde serveur (`garde.ts`) |
+| `proxy.ts` | Redirige vers `/login` sans session (ex-`middleware.ts`) |
+| `app/api/push/subscribe` | Enregistre l'abonnement push d'un appareil |
+| `app/api/cron/send-notifications` | Envoie les notifications dues (voir plus bas) |
+| `lib/status/` | Statuts dynamiques CDM26 |
+| `lib/constants.ts` | Constantes partagées (pseudo CDM26) |
+| `supabase/migrations/` | Politiques RLS (lecture seule pour la clé publique) |
+
+### Sécurité, en bref
+
+- Le navigateur **lit** Supabase avec la clé publique (anon), mais **n'écrit
+  jamais** : la RLS le lui interdit.
+- Toutes les écritures passent par des Server Actions qui vérifient la session
+  (`sessionValide()`) puis utilisent la clé service-role côté serveur.
+- `node --env-file=.env.local scripts/verif-rls.mjs` vérifie que la clé
+  publique ne peut que lire (script non destructif).
+
+## Variables d'environnement
+
+À mettre dans `.env.local` en local, et dans les réglages du projet sur Vercel.
+Modèle commenté : `.env.example`.
+
+| Variable | Rôle |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL du projet Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (lecture seule) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur Supabase, **secrète**, pour les écritures |
+| `APP_PASSWORD` | Mot de passe d'accès à l'app (obligatoire) |
+| `AUTH_SECRET` | Clé de signature du cookie de session (recommandée) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Clé VAPID publique (abonnement push) |
+| `VAPID_PRIVATE_KEY` | Clé VAPID privée (envoi des push), **secrète** |
+| `VAPID_SUBJECT` | Contact VAPID, ex. `mailto:…` |
+| `CRON_SECRET` | Secret attendu dans l'en-tête `x-cron-secret` de la route cron |
+
+> ⚠ Dans `.env.local`, Next remplace `$quelquechose` par une variable (vide).
+> Une valeur qui commence par `$` (ex. un mot de passe) est donc lue vide en
+> local. Choisir des valeurs sans `$`. Sur Vercel, pas ce problème.
+
+Clés VAPID : `npx web-push generate-vapid-keys`.
+
+## Commandes
+
+Node.js ≥ 20.9 requis.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # serveur de développement sur http://localhost:3000
+npm run build    # build de production
+npm run start    # lance le build de production
+npm run lint     # ESLint (next lint n'existe plus en Next 16)
+npx tsc --noEmit # vérification des types
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Notifications push
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Abonnement** : sur un appareil, le bouton « 🔔 Notifs » de l'en-tête
+   demande l'autorisation, puis envoie l'abonnement à `/api/push/subscribe`,
+   qui le stocke dans `dashboard_push_subscriptions`.
+2. **Réglage par jeu** : le bouton 🔔 d'une carte règle l'heure d'envoi, la
+   fréquence (quotidien / hebdo) et une période de début / fin facultative.
+3. **Envoi** : cron-job.org appelle toutes les 5 minutes
+   `GET /api/cron/send-notifications` avec l'en-tête
+   `x-cron-secret: <CRON_SECRET>`. Sans le bon secret, la route répond 401.
+   Elle est exclue du proxy (pas besoin de session). À chaque appel, la route :
+   - calcule l'heure **à Paris** (le serveur Vercel tourne en UTC) ;
+   - garde les jeux dont les notifications sont actives, dans leur période,
+     et dont l'heure d'envoi est à **±7 minutes** de maintenant ;
+   - saute un jeu déjà notifié depuis moins de 23 h (quotidien) ou 6 jours
+     (hebdo) : deux appels rapprochés n'envoient donc pas deux fois ;
+   - envoie la notification à tous les appareils abonnés, et supprime ceux
+     qui n'existent plus (réponse 404 / 410) ;
+   - répond `{"sent": <nombre de notifications envoyées>}`.
+4. **Réception** : `public/sw.js` affiche la notification ; un clic ouvre le
+   jeu (ou remet son onglet au premier plan).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Tester à la main (en local ou en production) :
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+curl -H "x-cron-secret: <CRON_SECRET>" https://<domaine>/api/cron/send-notifications
+```
