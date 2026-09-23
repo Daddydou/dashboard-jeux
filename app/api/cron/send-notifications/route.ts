@@ -35,9 +35,24 @@ export async function GET(req: Request) {
   // abonnements push. Protégé par CRON_SECRET ci-dessus.
   const supabase = supabaseAdmin()
 
+  // notif_heure / notif_debut / notif_fin sont saisis en heure de Paris, alors
+  // que le serveur Vercel tourne en UTC : on convertit avant de comparer.
   const now = new Date()
-  const todayStr = now.toISOString().split('T')[0]
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  )
+  const todayStr = `${parts.year}-${parts.month}-${parts.day}`
+  const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute)
 
   const { data: games } = await supabase
     .from('dashboard_games')
