@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { Game } from '@/lib/supabase'
 
 export type NotifFormState = {
   notif_active: boolean
@@ -14,6 +15,17 @@ export const EMPTY_NOTIF_FORM: NotifFormState = {
   notif_fin: '',
   notif_frequence: 'quotidien',
   notif_heure: '',
+}
+
+/** Réglages pré-remplis avec ceux d'un jeu. */
+export function jeuVersNotif(game: Game): NotifFormState {
+  return {
+    notif_active: game.notif_active ?? false,
+    notif_debut: game.notif_debut ?? '',
+    notif_fin: game.notif_fin ?? '',
+    notif_frequence: game.notif_frequence ?? 'quotidien',
+    notif_heure: game.notif_heure ?? '',
+  }
 }
 
 type Props = {

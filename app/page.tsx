@@ -6,10 +6,11 @@ import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
 import GameForm from '@/components/GameForm'
 import PushButton from '@/components/PushButton'
-import NotifModal, { EMPTY_NOTIF_FORM, type NotifFormState } from '@/components/NotifModal'
+import NotifModal from '@/components/NotifModal'
 import { useJeux } from '@/hooks/useJeux'
 import { useStatuts } from '@/hooks/useStatuts'
 import { useModaleJeu } from '@/hooks/useModaleJeu'
+import { useModaleNotif } from '@/hooks/useModaleNotif'
 
 export default function Home() {
   const jeux = useJeux()
@@ -19,31 +20,7 @@ export default function Home() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const { statuses, oublierStatut } = useStatuts(games)
   const modaleJeu = useModaleJeu({ ...jeux, oublierStatut })
-
-  // Feature C — notifications push
-  const [notifModalGame, setNotifModalGame] = useState<Game | null>(null)
-  const [notifForm, setNotifForm] = useState<NotifFormState>(EMPTY_NOTIF_FORM)
-
-  function openNotifModal(game: Game) {
-    setNotifModalGame(game)
-    setNotifForm({
-      notif_active: game.notif_active ?? false,
-      notif_debut: game.notif_debut ?? '',
-      notif_fin: game.notif_fin ?? '',
-      notif_frequence: game.notif_frequence ?? 'quotidien',
-      notif_heure: game.notif_heure ?? '',
-    })
-  }
-
-  async function handleNotifSave() {
-    if (!notifModalGame) return
-    try {
-      await jeux.enregistrerNotif(notifModalGame.id, notifForm)
-    } catch (err) {
-      jeux.surEchecEcriture(err)
-    }
-    setNotifModalGame(null)
-  }
+  const modaleNotif = useModaleNotif(jeux)
 
   function handleDelete(game: Game) {
     if (!confirm(`Supprimer "${game.nom}" ?`)) return
@@ -131,7 +108,7 @@ export default function Home() {
                     onDragOver={() => setDragOverId(game.id)}
                     onDrop={e => handleDrop(e, cat, game.id)}
                     onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
-                    onNotif={() => openNotifModal(game)}
+                    onNotif={() => modaleNotif.ouvrir(game)}
                     onEdit={() => modaleJeu.ouvrirEdition(game)}
                     onDelete={() => handleDelete(game)}
                     onOpen={() => jeux.marquerOuvert(game)}
@@ -158,13 +135,13 @@ export default function Home() {
       )}
 
       {/* Feature C — Modale notifications par jeu */}
-      {notifModalGame && (
+      {modaleNotif.jeu && (
         <NotifModal
-          gameName={notifModalGame.nom}
-          form={notifForm}
-          setForm={setNotifForm}
-          onSave={handleNotifSave}
-          onClose={() => setNotifModalGame(null)}
+          gameName={modaleNotif.jeu.nom}
+          form={modaleNotif.form}
+          setForm={modaleNotif.setForm}
+          onSave={modaleNotif.enregistrer}
+          onClose={modaleNotif.fermer}
         />
       )}
     </div>
