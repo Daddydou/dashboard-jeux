@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Game } from '@/lib/supabase'
+import { grouperParCategorie } from '@/lib/categories'
 import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
 import GameForm from '@/components/GameForm'
@@ -36,16 +37,7 @@ export default function Home() {
     })
   }
 
-  const grouped: Record<string, Game[]> = {}
-  for (const g of games) {
-    const cat = g.categorie ?? 'Autres'
-    ;(grouped[cat] ??= []).push(g)
-  }
-  const categories = Object.keys(grouped).sort((a, b) => {
-    if (a === 'Autres') return 1
-    if (b === 'Autres') return -1
-    return a.localeCompare(b, 'fr')
-  })
+  const { categories, parCategorie } = grouperParCategorie(games)
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
@@ -86,7 +78,7 @@ export default function Home() {
                 {cat}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped[cat].map(game => (
+                {parCategorie[cat].map(game => (
                   <GameCard
                     key={game.id}
                     game={game}

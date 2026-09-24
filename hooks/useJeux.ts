@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Game } from '@/lib/supabase'
 import { jourDeCycle, maintenant } from '@/lib/time'
+import { categorieDe } from '@/lib/categories'
 import {
   basculerFait as basculerFaitServeur,
   creerJeu,
@@ -132,7 +133,7 @@ export function useJeux() {
    * la catégorie (1, 2, 3…). Sans effet si l'un des deux n'y est pas.
    */
   async function deplacer(categorie: string, deId: string, versId: string) {
-    const catGames = games.filter(g => (g.categorie ?? 'Autres') === categorie)
+    const catGames = games.filter(g => categorieDe(g) === categorie)
     const fromIdx = catGames.findIndex(g => g.id === deId)
     const toIdx = catGames.findIndex(g => g.id === versId)
     if (fromIdx === -1 || toIdx === -1) return
