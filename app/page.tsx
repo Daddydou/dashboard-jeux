@@ -1,22 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import type { Game } from '@/lib/supabase'
-import type { GameStatus } from '@/lib/status/types'
-import { fetchCdm26PicksStatus } from '@/lib/status/cdm26Picks'
-import { fetchCdm26FantasyStatus } from '@/lib/status/cdm26Fantasy'
 import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
 import GameForm, { EMPTY_FORM, type FormState } from '@/components/GameForm'
 import PushButton from '@/components/PushButton'
 import NotifModal, { EMPTY_NOTIF_FORM, type NotifFormState } from '@/components/NotifModal'
 import { useJeux } from '@/hooks/useJeux'
-
-async function loadStatus(sourceType: string): Promise<GameStatus> {
-  if (sourceType === 'cdm26_picks') return fetchCdm26PicksStatus()
-  if (sourceType === 'cdm26_fantasy') return fetchCdm26FantasyStatus()
-  return { state: 'error' }
-}
+import { useStatuts } from '@/hooks/useStatuts'
 
 export default function Home() {
   const jeux = useJeux()
@@ -28,27 +20,11 @@ export default function Home() {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
-  const [statuses, setStatuses] = useState<Record<string, GameStatus>>({})
-  const statusFetched = useRef(new Set<string>())
+  const { statuses, oublierStatut } = useStatuts(games)
 
   // Feature C — notifications push
   const [notifModalGame, setNotifModalGame] = useState<Game | null>(null)
   const [notifForm, setNotifForm] = useState<NotifFormState>(EMPTY_NOTIF_FORM)
-
-  // Load statuses for games with source_type
-  useEffect(() => {
-    const todo = games.filter(g => g.source_type && !statusFetched.current.has(g.id))
-    if (todo.length === 0) return
-    todo.forEach(g => {
-      statusFetched.current.add(g.id)
-      setStatuses(prev => ({ ...prev, [g.id]: { state: 'loading' } }))
-      loadStatus(g.source_type!).then(status => {
-        setStatuses(prev => ({ ...prev, [g.id]: status }))
-      }).catch(() => {
-        setStatuses(prev => ({ ...prev, [g.id]: { state: 'error' } }))
-      })
-    })
-  }, [games])
 
   function openNotifModal(game: Game) {
     setNotifModalGame(game)
@@ -107,12 +83,7 @@ export default function Home() {
         const prevSourceType = editingGame.source_type ?? ''
         const nextSourceType = form.source_type
         if (prevSourceType !== nextSourceType) {
-          statusFetched.current.delete(editingGame.id)
-          setStatuses(prev => {
-            const next = { ...prev }
-            delete next[editingGame.id]
-            return next
-          })
+          oublierStatut(editingGame.id)
         }
   
         await jeux.modifier(editingGame.id, form)
