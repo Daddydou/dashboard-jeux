@@ -37,6 +37,7 @@ téléphone (PWA).
 | `app/api/cron/send-notifications` | Envoie les notifications dues (voir plus bas) |
 | `lib/status/` | Statuts dynamiques CDM26 |
 | `lib/constants.ts` | Constantes partagées (pseudo CDM26) |
+| `lib/time.ts` | Heure de Paris : `maintenant()` (simulable) et `partiesParis()`, pour le cron comme pour la page |
 | `supabase/migrations/` | Politiques RLS (lecture seule pour la clé publique) |
 
 ### Sécurité, en bref
@@ -95,11 +96,16 @@ npx tsc --noEmit # vérification des types
    `GET /api/cron/send-notifications` avec l'en-tête
    `x-cron-secret: <CRON_SECRET>`. Sans le bon secret, la route répond 401.
    Elle est exclue du proxy (pas besoin de session). À chaque appel, la route :
-   - calcule l'heure **à Paris** (le serveur Vercel tourne en UTC) ;
+   - calcule l'heure **à Paris** via `lib/time.ts` (le serveur Vercel tourne
+     en UTC) ;
    - garde les jeux dont les notifications sont actives, dans leur période,
-     et dont l'heure d'envoi est à **±7 minutes** de maintenant ;
-   - saute un jeu déjà notifié depuis moins de 23 h (quotidien) ou 6 jours
-     (hebdo) : deux appels rapprochés n'envoient donc pas deux fois ;
+     et dont l'heure d'envoi est passée depuis **moins de 15 minutes** :
+     jamais d'envoi en avance, et un appel du cron en retard envoie quand
+     même (un rappel de 23:58 part bien à 00:03) ;
+   - saute un jeu déjà notifié depuis moins de 12 h (quotidien) ou 6 j 12 h
+     (hebdo) : deux appels rapprochés n'envoient donc pas deux fois, et un
+     rappel hebdo revient tous les 7 jours, le même jour que le premier
+     envoi ;
    - envoie la notification à tous les appareils abonnés, et supprime ceux
      qui n'existent plus (réponse 404 / 410) ;
    - répond `{"sent": <nombre de notifications envoyées>}`.

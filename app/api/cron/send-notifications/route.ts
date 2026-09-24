@@ -1,5 +1,26 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { jourDeCycle, maintenant, minutesDepuis } from '@/lib/time'
 import webpush from 'web-push'
+
+/**
+ * Le cron passe toutes les 5 min : une fenêtre de 15 min après l'heure
+ * choisie laisse de la marge si cron-job.org est en retard ou saute un appel.
+ */
+const FENETRE_MINUTES = 15
+
+const HEURE_MS = 3_600_000
+/**
+ * Deux rappels quotidiens consécutifs sont espacés d'environ 24 h (23 h ou
+ * 25 h aux changements d'heure, ± la fenêtre), deux envois dans la même
+ * fenêtre de moins de 15 min : 12 h les sépare sans ambiguïté.
+ */
+const ECART_MIN_QUOTIDIEN_MS = 12 * HEURE_MS
+/**
+ * Hebdo : 6 j 12 h bloque le 6e jour (≤ 145 h) et laisse passer le 7e
+ * (≥ 166 h) — le rappel revient donc chaque semaine, le même jour que le
+ * premier envoi.
+ */
+const ECART_MIN_HEBDO_MS = 156 * HEURE_MS
 
 type GameRow = {
   id: string
@@ -36,23 +57,8 @@ export async function GET(req: Request) {
   const supabase = supabaseAdmin()
 
   // notif_heure / notif_debut / notif_fin sont saisis en heure de Paris, alors
-  // que le serveur Vercel tourne en UTC : on convertit avant de comparer.
-  const now = new Date()
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Paris',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  )
-  const todayStr = `${parts.year}-${parts.month}-${parts.day}`
-  const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute)
+  // que le serveur Vercel tourne en UTC : tout passe par lib/time.ts.
+  const now = maintenant()
 
   const { data: games } = await supabase
     .from('dashboard_games')
@@ -71,22 +77,22 @@ export async function GET(req: Request) {
   let sent = 0
 
   for (const game of games as GameRow[]) {
-    // Check date range
-    if (game.notif_debut && todayStr < game.notif_debut) continue
-    if (game.notif_fin && todayStr > game.notif_fin) continue
+    // Jamais en avance : on n'envoie qu'APRÈS l'heure choisie, dans la
+    // fenêtre qui suit (un appel du cron en retard envoie quand même).
+    if (minutesDepuis(now, game.notif_heure) >= FENETRE_MINUTES) continue
 
-    // Check time window (±7 min around notif_heure)
-    const [hh, mm] = game.notif_heure.split(':').map(Number)
-    const targetMinutes = hh * 60 + mm
-    if (Math.abs(currentMinutes - targetMinutes) > 7) continue
+    // Période : on juge le jour du rappel, pas celui de l'appel (un rappel de
+    // 23:58 envoyé à 00:03 appartient à la veille).
+    const jourDuRappel = jourDeCycle(now, game.notif_heure)
+    if (game.notif_debut && jourDuRappel < game.notif_debut) continue
+    if (game.notif_fin && jourDuRappel > game.notif_fin) continue
 
-    // Idempotency: skip if sent too recently
+    // Anti-doublon : un seul envoi par fenêtre, puis on attend le jour
+    // (quotidien) ou la semaine (hebdo) suivant(e).
     if (game.last_notif_sent_at) {
-      const msSinceLast = now.getTime() - new Date(game.last_notif_sent_at).getTime()
-      const minInterval = game.notif_frequence === 'hebdo'
-        ? 6 * 24 * 3_600_000   // 6 days
-        : 23 * 3_600_000        // 23 hours (quotidien)
-      if (msSinceLast < minInterval) continue
+      const depuisDernier = now.getTime() - new Date(game.last_notif_sent_at).getTime()
+      const minimum = game.notif_frequence === 'hebdo' ? ECART_MIN_HEBDO_MS : ECART_MIN_QUOTIDIEN_MS
+      if (depuisDernier < minimum) continue
     }
 
     const payload = JSON.stringify({

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Game } from '@/lib/supabase'
+import { jourDeCycle, maintenant } from '@/lib/time'
 import type { GameStatus } from '@/lib/status/types'
 import { fetchCdm26PicksStatus } from '@/lib/status/cdm26Picks'
 import { fetchCdm26FantasyStatus } from '@/lib/status/cdm26Fantasy'
@@ -94,20 +95,13 @@ export default function Home() {
     setLoading(false)
   }
 
-  // Feature B — is the checkbox "done" (respects reset_heure)
+  // Feature B — coche "fait" : valable jusqu'au prochain reset_heure, à
+  // Paris (et non à l'heure du téléphone).
   function isActuallyDone(game: Game): boolean {
     const doneAt = doneMap[game.id]
     if (!doneAt) return false
     if (!game.reset_heure) return true
-    const now = new Date()
-    const [hh, mm] = game.reset_heure.split(':').map(Number)
-    const todayReset = new Date(now)
-    todayReset.setHours(hh, mm, 0, 0)
-    // If today's reset time hasn't passed yet, use yesterday's reset time
-    const lastReset = todayReset <= now
-      ? todayReset
-      : new Date(todayReset.getTime() - 86_400_000)
-    return new Date(doneAt) > lastReset
+    return jourDeCycle(new Date(doneAt), game.reset_heure) === jourDeCycle(maintenant(), game.reset_heure)
   }
 
   async function handleCheck(game: Game, checked: boolean) {
