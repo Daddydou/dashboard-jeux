@@ -1,26 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
 import type { Game } from '@/lib/supabase'
-import { jourDeCycle, maintenant } from '@/lib/time'
 import type { GameStatus } from '@/lib/status/types'
 import { fetchCdm26PicksStatus } from '@/lib/status/cdm26Picks'
 import { fetchCdm26FantasyStatus } from '@/lib/status/cdm26Fantasy'
-import {
-  basculerFait,
-  creerJeu,
-  enregistrerNotif,
-  marquerOuvert,
-  modifierJeu,
-  reordonner,
-  supprimerJeu,
-} from './actions'
 import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
 import GameForm, { EMPTY_FORM, type FormState } from '@/components/GameForm'
 import PushButton from '@/components/PushButton'
 import NotifModal, { EMPTY_NOTIF_FORM, type NotifFormState } from '@/components/NotifModal'
+import { useJeux } from '@/hooks/useJeux'
 
 async function loadStatus(sourceType: string): Promise<GameStatus> {
   if (sourceType === 'cdm26_picks') return fetchCdm26PicksStatus()
@@ -29,8 +19,8 @@ async function loadStatus(sourceType: string): Promise<GameStatus> {
 }
 
 export default function Home() {
-  const [games, setGames] = useState<Game[]>([])
-  const [loading, setLoading] = useState(true)
+  const jeux = useJeux()
+  const { games, loading } = jeux
   const [modalOpen, setModalOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -40,9 +30,6 @@ export default function Home() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const [statuses, setStatuses] = useState<Record<string, GameStatus>>({})
   const statusFetched = useRef(new Set<string>())
-
-  // Feature B — coche "fait"
-  const [doneMap, setDoneMap] = useState<Record<string, string | null>>({})
 
   // Feature C — notifications push
   const [notifModalGame, setNotifModalGame] = useState<Game | null>(null)
@@ -63,59 +50,6 @@ export default function Home() {
     })
   }, [games])
 
-  // Écriture refusée (session expirée, erreur réseau…) : on prévient et on
-  // resynchronise l'affichage optimiste avec la base.
-  function surEchecEcriture(err: unknown) {
-    console.error('Écriture refusée :', err)
-    alert('Enregistrement impossible (session expirée ?). Rechargement des données.')
-    loadGames()
-  }
-
-  async function loadGames() {
-    const [gamesRes, doneRes] = await Promise.all([
-      supabase
-        .from('dashboard_games')
-        .select('*')
-        .eq('actif', true)
-        .order('ordre', { ascending: true })
-        .order('created_at', { ascending: true }),
-      supabase.from('dashboard_done').select('game_id, done_at'),
-    ])
-
-    if (gamesRes.data) setGames(gamesRes.data as Game[])
-    if (doneRes.data) {
-      const map: Record<string, string | null> = {}
-      for (const r of doneRes.data as { game_id: string; done_at: string }[]) {
-        map[r.game_id] = r.done_at
-      }
-      setDoneMap(map)
-    }
-    setLoading(false)
-  }
-
-  // Chargement initial. Placé après la déclaration de loadGames : le
-  // React Compiler refuse une fonction utilisée avant d'être déclarée.
-  useEffect(() => { loadGames() }, [])
-
-  // Feature B — coche "fait" : valable jusqu'au prochain reset_heure, à
-  // Paris (et non à l'heure du téléphone).
-  function isActuallyDone(game: Game): boolean {
-    const doneAt = doneMap[game.id]
-    if (!doneAt) return false
-    if (!game.reset_heure) return true
-    return jourDeCycle(new Date(doneAt), game.reset_heure) === jourDeCycle(maintenant(), game.reset_heure)
-  }
-
-  async function handleCheck(game: Game, checked: boolean) {
-    setDoneMap(prev => ({ ...prev, [game.id]: checked ? new Date().toISOString() : null }))
-    try {
-      const doneAt = await basculerFait(game.id, checked)
-      setDoneMap(prev => ({ ...prev, [game.id]: doneAt }))
-    } catch (err) {
-      surEchecEcriture(err)
-    }
-  }
-
   function openNotifModal(game: Game) {
     setNotifModalGame(game)
     setNotifForm({
@@ -130,10 +64,9 @@ export default function Home() {
   async function handleNotifSave() {
     if (!notifModalGame) return
     try {
-      const data = await enregistrerNotif(notifModalGame.id, notifForm)
-      setGames(prev => prev.map(g => g.id === notifModalGame.id ? data : g))
+      await jeux.enregistrerNotif(notifModalGame.id, notifForm)
     } catch (err) {
-      surEchecEcriture(err)
+      jeux.surEchecEcriture(err)
     }
     setNotifModalGame(null)
   }
@@ -160,14 +93,9 @@ export default function Home() {
     setModalOpen(true)
   }
 
-  async function handleDelete(game: Game) {
+  function handleDelete(game: Game) {
     if (!confirm(`Supprimer "${game.nom}" ?`)) return
-    try {
-      await supprimerJeu(game.id)
-      setGames(prev => prev.filter(g => g.id !== game.id))
-    } catch (err) {
-      surEchecEcriture(err)
-    }
+    jeux.supprimer(game)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -187,15 +115,13 @@ export default function Home() {
           })
         }
   
-        const data = await modifierJeu(editingGame.id, form)
-        setGames(prev => prev.map(g => g.id === editingGame.id ? data : g))
+        await jeux.modifier(editingGame.id, form)
       } else {
-        const data = await creerJeu(form)
-        setGames(prev => [...prev, data])
+        await jeux.ajouter(form)
       }
     } catch (err) {
       setSubmitting(false)
-      surEchecEcriture(err)
+      jeux.surEchecEcriture(err)
       return
     }
 
@@ -203,47 +129,13 @@ export default function Home() {
     setModalOpen(false)
   }
 
-  async function handleLinkClick(game: Game) {
-    const now = new Date().toISOString()
-    setGames(prev => prev.map(g => g.id === game.id ? { ...g, dernier_ouvert: now } : g))
-    // Pas d'alerte ici : l'utilisateur vient de quitter l'onglet pour le jeu.
-    marquerOuvert(game.id).catch(err => console.error('dernier_ouvert non enregistré :', err))
-  }
-
-  async function handleDrop(e: React.DragEvent, category: string, targetId: string) {
+  function handleDrop(e: React.DragEvent, category: string, targetId: string) {
     e.preventDefault()
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null)
-      setDragOverId(null)
-      return
-    }
-    const catGames = games.filter(g => (g.categorie ?? 'Autres') === category)
-    const fromIdx = catGames.findIndex(g => g.id === draggedId)
-    const toIdx = catGames.findIndex(g => g.id === targetId)
-    if (fromIdx === -1 || toIdx === -1) {
-      setDraggedId(null)
-      setDragOverId(null)
-      return
-    }
-    const reordered = [...catGames]
-    const [moved] = reordered.splice(fromIdx, 1)
-    reordered.splice(toIdx, 0, moved)
-
-    const updates = reordered.map((g, i) => ({ id: g.id, ordre: i + 1 }))
-    setGames(prev =>
-      prev.map(g => {
-        const u = updates.find(u => u.id === g.id)
-        return u ? { ...g, ordre: u.ordre } : g
-      })
-    )
+    const deId = draggedId
     setDraggedId(null)
     setDragOverId(null)
-
-    try {
-      await reordonner(updates)
-    } catch (err) {
-      surEchecEcriture(err)
-    }
+    if (!deId || deId === targetId) return
+    jeux.deplacer(category, deId, targetId)
   }
 
   function toggleNotes(gameId: string) {
@@ -310,7 +202,7 @@ export default function Home() {
                     key={game.id}
                     game={game}
                     status={statuses[game.id]}
-                    done={isActuallyDone(game)}
+                    done={jeux.estFait(game)}
                     notesExpanded={expandedNotes.has(game.id)}
                     isDragged={draggedId === game.id}
                     isDragOver={dragOverId === game.id}
@@ -321,8 +213,8 @@ export default function Home() {
                     onNotif={() => openNotifModal(game)}
                     onEdit={() => openEdit(game)}
                     onDelete={() => handleDelete(game)}
-                    onOpen={() => handleLinkClick(game)}
-                    onCheck={checked => handleCheck(game, checked)}
+                    onOpen={() => jeux.marquerOuvert(game)}
+                    onCheck={checked => jeux.basculerFait(game, checked)}
                     onToggleNotes={() => toggleNotes(game.id)}
                   />
                 ))}
