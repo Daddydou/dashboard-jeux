@@ -3,10 +3,13 @@
 import { useState } from 'react'
 import type { Game } from '@/lib/supabase'
 import { grouperParCategorie } from '@/lib/categories'
+import { correspond } from '@/lib/recherche'
 import GameCard from '@/components/GameCard'
 import GameForm from '@/components/GameForm'
 import Entete from '@/components/Entete'
 import NotifModal from '@/components/NotifModal'
+import BarreRecherche from '@/components/BarreRecherche'
+import PaletteCommandes from '@/components/PaletteCommandes'
 import { useJeux } from '@/hooks/useJeux'
 import { useStatuts } from '@/hooks/useStatuts'
 import { useModaleJeu } from '@/hooks/useModaleJeu'
@@ -21,6 +24,7 @@ export default function Home() {
   const jeux = useJeux()
   const { games, loading } = jeux
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
+  const [filtre, setFiltre] = useState('')
   const { statuses, oublierStatut } = useStatuts(games)
   const modaleJeu = useModaleJeu({ ...jeux, oublierStatut })
   const modaleNotif = useModaleNotif(jeux)
@@ -40,11 +44,15 @@ export default function Home() {
     })
   }
 
-  const { categories, parCategorie } = grouperParCategorie(games)
+  const affiches = games.filter(g => correspond(g, filtre))
+  const { categories, parCategorie } = grouperParCategorie(affiches)
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
       <Entete onAjouter={modaleJeu.ouvrirAjout} />
+      {games.length > 0 && (
+        <BarreRecherche valeur={filtre} onChange={setFiltre} nbAffiches={affiches.length} nbTotal={games.length} />
+      )}
 
       <main className="max-w-6xl mx-auto">
         {loading ? (
@@ -52,6 +60,10 @@ export default function Home() {
         ) : games.length === 0 ? (
           <p className="text-slate-400 text-center py-20">
             Aucun jeu — clique sur + Ajouter !
+          </p>
+        ) : affiches.length === 0 ? (
+          <p className="text-slate-400 text-center py-20">
+            Aucun jeu ne correspond à « {filtre} ».
           </p>
         ) : (
           categories.map(cat => (
@@ -81,6 +93,8 @@ export default function Home() {
           ))
         )}
       </main>
+
+      <PaletteCommandes games={games} onOuvrir={jeux.marquerOuvert} />
 
       {/* Modal ajout / édition */}
       {modaleJeu.modalOpen && (
