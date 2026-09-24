@@ -49,6 +49,14 @@ Un jeu affiche un badge si son `source_type` est renseigné (liste déroulante �
 - Mon pseudo dans les apps CDM26 est dans `lib/constants.ts` (`MON_PSEUDO`), nulle part ailleurs.
 - Ajouter un badge : une option dans `GameForm`, une fonction dans `lib/status/`, une ligne dans `loadStatus`, et si besoin une RPC (voir ci-dessus).
 
+## Boîte de rappels
+
+- Une source = un fichier `lib/rappels/<app>.ts` (`server-only`) qui renvoie un `ResultatSource` (`{ rappels, note? }`) et **ne lève jamais** : une panne devient une note.
+- `lireRappels()` (Server Action, session exigée) interroge les sources en parallèle (`Promise.allSettled`) et trie : à faire d'abord, puis par échéance.
+- TVTFL passe par `tvtfl_dashboard_badge(p_token)` avec `TVTFL_DASHBOARD_TOKEN` (secret, serveur uniquement) ; TTFL par `get_ttfl_pick_du_jour` (clé publique).
+- Rien n'est stocké ; « Marquer vu » est un confort local (`localStorage`). Pas de push pour ces rappels (choix de Daddy).
+- Ajouter une source : un fichier dans `lib/rappels/`, une ligne dans `lireRappels`, et `source` dans le type `Rappel`.
+
 ## Stats d'usage
 
 - Table `dashboard_ouvertures` (migration 0004), une ligne par ouverture, écrite par `marquerOuvert` en plus de `dernier_ouvert`. Lecture publique, écriture service-role.

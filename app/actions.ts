@@ -4,6 +4,10 @@ import { exigerSession } from '@/auth/garde'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { Game } from '@/lib/supabase'
 import { FORMAT_DEPOT, lireSanteDepot, type SanteDepot } from '@/lib/github'
+import { maintenant } from '@/lib/time'
+import type { Rappel, ResultatSource } from '@/lib/rappels/types'
+import { rappelsTvtfl } from '@/lib/rappels/tvtfl'
+import { rappelsTtfl } from '@/lib/rappels/ttfl'
 
 /**
  * Toutes les écritures du dashboard. Une Server Action est un endpoint POST
@@ -152,16 +156,16 @@ export async function enregistrerNotif(gameId: string, n: ChampsNotif): Promise<
  */
 export async function marquerOuvert(gameId: string): Promise<string> {
   await exigerSession()
-  const maintenant = new Date().toISOString()
+  const horodatage = new Date().toISOString()
   const gid = id(gameId)
   const db = supabaseAdmin()
   const [maj, historique] = await Promise.all([
-    db.from('dashboard_games').update({ dernier_ouvert: maintenant }).eq('id', gid),
-    db.from('dashboard_ouvertures').insert({ game_id: gid, opened_at: maintenant }),
+    db.from('dashboard_games').update({ dernier_ouvert: horodatage }).eq('id', gid),
+    db.from('dashboard_ouvertures').insert({ game_id: gid, opened_at: horodatage }),
   ])
   const erreur = maj.error ?? historique.error
   if (erreur) throw new Error(erreur.message)
-  return maintenant
+  return horodatage
 }
 
 export async function reordonner(ordres: { id: string; ordre: number }[]): Promise<void> {
@@ -228,4 +232,40 @@ export async function lireSantePortfolio(): Promise<SanteJeu[]> {
       sante: j.depot ? await lireSanteDepot(j.depot) : null,
     })),
   )
+}
+
+// --- Boîte de rappels (lecture) ---------------------------------------------
+
+export type BoiteRappels = { rappels: Rappel[]; notes: string[] }
+
+/**
+ * Rappels des apps connectées (TVTFL, TTFL), interrogées en parallèle. Une
+ * source en panne donne une note, jamais une erreur : les autres s'affichent.
+ * Server Action car le jeton TVTFL est secret ; session exigée.
+ * Tri : à faire d'abord, puis par échéance (inconnue en dernier).
+ */
+export async function lireRappels(): Promise<BoiteRappels> {
+  await exigerSession()
+  const now = maintenant()
+  const sources: [string, Promise<ResultatSource>][] = [
+    ['TVTFL', rappelsTvtfl(now)],
+    ['TTFL', rappelsTtfl()],
+  ]
+  const resultats = await Promise.allSettled(sources.map(([, p]) => p))
+
+  const rappels: Rappel[] = []
+  const notes: string[] = []
+  resultats.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(`Rappels ${sources[i][0]} :`, r.reason)
+      notes.push(`${sources[i][0]} : injoignable.`)
+      return
+    }
+    rappels.push(...r.value.rappels)
+    if (r.value.note) notes.push(r.value.note)
+  })
+
+  const temps = (r: Rappel) => (r.echeance ? new Date(r.echeance).getTime() : Infinity)
+  rappels.sort((a, b) => Number(a.fait) - Number(b.fait) || temps(a) - temps(b))
+  return { rappels, notes }
 }

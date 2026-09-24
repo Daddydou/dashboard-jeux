@@ -80,3 +80,18 @@ export function jourDeCycle(instant: Date, heureBascule: string): string {
   const { date, minutes } = partiesParis(instant)
   return minutes >= minutesDepuisMinuit(heureBascule) ? date : veille(date)
 }
+
+const formatCourt = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: FUSEAU,
+  weekday: 'short',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+/** « jeu. 25/09 01:00 » : jour et heure d'un instant, à Paris. */
+export function formatParis(instant: Date): string {
+  return formatCourt.format(instant).replace(',', '')
+}

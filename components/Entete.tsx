@@ -1,8 +1,9 @@
 import { seDeconnecter } from '@/app/login/actions'
 import PushButton from './PushButton'
 import PanneauSante from './PanneauSante'
+import BoiteRappels from './BoiteRappels'
 
-/** En-tête : titre, bouton push, santé du portfolio, ajout d'un jeu et déconnexion. */
+/** En-tête : titre, bouton push, rappels, santé du portfolio, ajout d'un jeu et déconnexion. */
 export default function Entete({ onAjouter }: { onAjouter: () => void }) {
   return (
     <header className="flex items-center justify-between mb-10 max-w-6xl mx-auto">
@@ -10,6 +11,7 @@ export default function Entete({ onAjouter }: { onAjouter: () => void }) {
       <div className="flex items-center gap-2">
         {/* Feature C — bouton push */}
         <PushButton />
+        <BoiteRappels />
         <PanneauSante />
         <button
           onClick={onAjouter}

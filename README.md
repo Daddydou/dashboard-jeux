@@ -36,6 +36,7 @@ téléphone (PWA).
 | `lib/categories.ts` | Regroupement et tri des jeux par catégorie |
 | `lib/recherche.ts` | Recherche sans accents (filtre et lanceur Ctrl+K) |
 | `lib/stats.ts` | Stats d'usage par jeu (7 j, 30 j, total, série), en jours de Paris |
+| `lib/rappels/` | Sources de la boîte de rappels (TVTFL, TTFL), une par fichier |
 | `lib/github.ts` | Santé d'un dépôt GitHub (version de Next, dernier push, CLAUDE.md, README) |
 | `app/actions.ts` | Server Actions : toutes les écritures Supabase |
 | `app/login/` | Page et actions de connexion / déconnexion |
@@ -99,6 +100,22 @@ bloquer le reste de la page.
 
 Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
 
+### Boîte de rappels (📬)
+
+Le bouton 📬 de l'en-tête regroupe les rappels des apps connectées, avec
+un compteur de ce qui reste à faire :
+
+| Source | Rappel | Fonction Supabase |
+|---|---|---|
+| TVTFL | pick du prochain deck à faire / fait, avec l'heure de fermeture | `tvtfl_dashboard_badge` (jeton `TVTFL_DASHBOARD_TOKEN`) |
+| TTFL | pick du soir recommandé par le moteur (mes-agents) | `get_ttfl_pick_du_jour` |
+
+Couleur selon l'échéance : rouge à moins de 2 h, orange à moins de 24 h.
+« Marquer vu » retire un rappel du compteur sur cet appareil. Rien n'est
+stocké : les rappels sont recalculés à chaque ouverture, côté serveur (le
+jeton TVTFL est secret). Une source en panne affiche une note sans bloquer
+les autres. Pas de notification push pour ces rappels.
+
 ### Santé du portfolio (🩺)
 
 Le bouton 🩺 de l'en-tête liste, pour chaque jeu relié à un dépôt GitHub
@@ -136,6 +153,7 @@ Modèle commenté : `.env.example`.
 | `VAPID_PRIVATE_KEY` | Clé VAPID privée (envoi des push), **secrète** |
 | `VAPID_SUBJECT` | Contact VAPID, ex. `mailto:…` |
 | `CRON_SECRET` | Secret attendu dans l'en-tête `x-cron-secret` de la route cron |
+| `TVTFL_DASHBOARD_TOKEN` | Facultatif, **secret** : jeton du badge TVTFL pour la boîte de rappels |
 | `GITHUB_TOKEN` | Facultatif, **secret** : jeton GitHub en lecture seule pour la santé du portfolio (dépôts privés) |
 | `DASHBOARD_FAKE_NOW` | Facultatif, local uniquement : date simulée pour tester les notifications (ignorée en production) |
 
