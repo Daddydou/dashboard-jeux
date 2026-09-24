@@ -54,6 +54,51 @@ téléphone (PWA).
 - `node --env-file=.env.local scripts/verif-rls.mjs` vérifie que la clé
   publique ne peut que lire (script non destructif).
 
+## Fonctionnement
+
+### Une carte = un jeu
+
+- **Clic sur la carte** : ouvre le jeu dans un nouvel onglet et enregistre
+  la date d'ouverture (« il y a 2 h »).
+- **Coche « Fait »** : je coche quand j'ai joué. Si le jeu a une *heure de
+  reset* (ex. 06:00), la coche se décoche toute seule chaque jour à cette
+  heure-là, **heure de Paris**. Sans heure de reset, elle reste cochée.
+- **Notes** : un mémo libre par jeu (room code, identifiant…), dépliable.
+- **Glisser-déposer** : réordonne les cartes à l'intérieur d'une catégorie.
+- Les catégories sont triées par ordre alphabétique ; un jeu sans catégorie
+  va dans « Autres », toujours en dernier.
+
+Chaque action met l'écran à jour tout de suite, puis l'enregistre côté
+serveur. Si le serveur refuse (session expirée…), une alerte prévient et
+les données sont rechargées depuis la base.
+
+### Badges de statut
+
+Certains jeux affichent un badge calculé en direct depuis l'app du jeu. On
+le choisit dans « Statut dynamique » en éditant la carte :
+
+| Statut dynamique | Affiche | Source (fonction Supabase) |
+|---|---|---|
+| CDM26 Picks | classement et points, puis ✅ À jour / ⚠️ Picks à faire / ✅ Aucun match | `get_dashboard_picks_full` |
+| CDM26 Fantasy | classement et points | `get_dashboard_fantasy_status` |
+
+Les tables des apps CDM26 ne sont pas lisibles avec la clé publique. Le
+dashboard appelle donc des **fonctions `SECURITY DEFINER` en lecture
+seule**, qui ne renvoient que ces quelques chiffres pour mon pseudo
+(`lib/constants.ts`). En cas de problème, le badge affiche « — » sans
+bloquer le reste de la page.
+
+Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
+
+### Ce qui vit en dehors de ce dépôt
+
+- **Supabase** (projet partagé avec mes autres apps) : les tables
+  `dashboard_*`, et les deux fonctions `get_dashboard_*` ci-dessus, créées
+  directement dans Supabase (leur SQL n'est dans aucun dépôt).
+- **cron-job.org** : l'appel toutes les 5 minutes qui déclenche les
+  notifications (voir plus bas). Sans lui, aucune notification ne part.
+- **Vercel** : l'hébergement et les variables d'environnement de production.
+
 ## Variables d'environnement
 
 À mettre dans `.env.local` en local, et dans les réglages du projet sur Vercel.
@@ -70,6 +115,7 @@ Modèle commenté : `.env.example`.
 | `VAPID_PRIVATE_KEY` | Clé VAPID privée (envoi des push), **secrète** |
 | `VAPID_SUBJECT` | Contact VAPID, ex. `mailto:…` |
 | `CRON_SECRET` | Secret attendu dans l'en-tête `x-cron-secret` de la route cron |
+| `DASHBOARD_FAKE_NOW` | Facultatif, local uniquement : date simulée pour tester les notifications (ignorée en production) |
 
 > ⚠ Dans `.env.local`, Next remplace `$quelquechose` par une variable (vide).
 > Une valeur qui commence par `$` (ex. un mot de passe) est donc lue vide en
