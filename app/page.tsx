@@ -77,6 +77,7 @@ export default function Home() {
                     key={game.id}
                     game={game}
                     status={statuses[game.id]}
+                    usage={jeux.stats[game.id]}
                     done={jeux.estFait(game)}
                     notesExpanded={expandedNotes.has(game.id)}
                     {...glisser.propsCarte(game.id, cat)}

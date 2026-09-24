@@ -34,6 +34,8 @@ téléphone (PWA).
 | `hooks/useGlisserDeposer.ts` | Réorganisation des cartes par glisser-déposer |
 | `components/` | `Entete`, `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
 | `lib/categories.ts` | Regroupement et tri des jeux par catégorie |
+| `lib/recherche.ts` | Recherche sans accents (filtre et lanceur Ctrl+K) |
+| `lib/stats.ts` | Stats d'usage par jeu (7 j, 30 j, total, série), en jours de Paris |
 | `lib/github.ts` | Santé d'un dépôt GitHub (version de Next, dernier push, CLAUDE.md, README) |
 | `app/actions.ts` | Server Actions : toutes les écritures Supabase |
 | `app/login/` | Page et actions de connexion / déconnexion |
@@ -60,7 +62,13 @@ téléphone (PWA).
 ### Une carte = un jeu
 
 - **Clic sur la carte** : ouvre le jeu dans un nouvel onglet et enregistre
-  la date d'ouverture (« il y a 2 h »).
+  l'ouverture. La carte affiche la dernière ouverture (« il y a 2 h »), le
+  nombre d'ouvertures sur 7 jours et la série de jours consécutifs (🔥,
+  à partir de 2 jours) ; le total et les 30 jours sont au survol.
+  Historique dans `dashboard_ouvertures` (depuis le 24/09/2026). Le temps
+  passé dans un jeu n'est pas mesurable (il s'ouvre dans un autre onglet).
+- **Ctrl+K** (⌘K) : lanceur au clavier pour ouvrir un jeu ; la barre de
+  filtre sous l'en-tête restreint les cartes affichées.
 - **Coche « Fait »** : je coche quand j'ai joué. Si le jeu a une *heure de
   reset* (ex. 06:00), la coche se décoche toute seule chaque jour à cette
   heure-là, **heure de Paris**. Sans heure de reset, elle reste cochée.
@@ -96,8 +104,8 @@ Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
 Le bouton 🩺 de l'en-tête liste, pour chaque jeu relié à un dépôt GitHub
 (champ « Dépôt GitHub » de la carte, ex. `Daddydou/tvtfl`) : la version de
 Next.js, la date du dernier push et la présence de `CLAUDE.md` / `README.md`.
-Une version de Next antérieure à 16 est signalée « à migrer ». Les sites
-externes (sans dépôt) affichent « — ».
+Une version de Next antérieure à 16 est signalée « à migrer ». Un jeu sans
+dépôt renseigné (ex. un site externe) affiche « — ».
 
 Lecture via l'API GitHub, côté serveur, mise en cache 1 h. Les dépôts
 privés demandent `GITHUB_TOKEN`.

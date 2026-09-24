@@ -145,15 +145,22 @@ export async function enregistrerNotif(gameId: string, n: ChampsNotif): Promise<
   return data as Game
 }
 
-/** Horodatage serveur, renvoyé au client pour qu'il affiche la même valeur. */
+/**
+ * Horodatage serveur, renvoyé au client pour qu'il affiche la même valeur.
+ * Met à jour `dernier_ouvert` ET ajoute une ligne à l'historique des
+ * ouvertures (stats d'usage).
+ */
 export async function marquerOuvert(gameId: string): Promise<string> {
   await exigerSession()
   const maintenant = new Date().toISOString()
-  const { error } = await supabaseAdmin()
-    .from('dashboard_games')
-    .update({ dernier_ouvert: maintenant })
-    .eq('id', id(gameId))
-  if (error) throw new Error(error.message)
+  const gid = id(gameId)
+  const db = supabaseAdmin()
+  const [maj, historique] = await Promise.all([
+    db.from('dashboard_games').update({ dernier_ouvert: maintenant }).eq('id', gid),
+    db.from('dashboard_ouvertures').insert({ game_id: gid, opened_at: maintenant }),
+  ])
+  const erreur = maj.error ?? historique.error
+  if (erreur) throw new Error(erreur.message)
   return maintenant
 }
 

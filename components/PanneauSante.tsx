@@ -101,7 +101,7 @@ export default function PanneauSante() {
                           {sante && <div className="text-xs text-slate-500">{sante.depot}</div>}
                         </td>
                         {!sante ? (
-                          <td colSpan={4} className="py-2 text-slate-600">— pas de dépôt (site externe)</td>
+                          <td colSpan={4} className="py-2 text-slate-600">— aucun dépôt renseigné</td>
                         ) : sante.erreur ? (
                           <td colSpan={4} className="py-2 text-orange-300">{sante.erreur}</td>
                         ) : (

@@ -49,6 +49,12 @@ Un jeu affiche un badge si son `source_type` est renseigné (liste déroulante �
 - Mon pseudo dans les apps CDM26 est dans `lib/constants.ts` (`MON_PSEUDO`), nulle part ailleurs.
 - Ajouter un badge : une option dans `GameForm`, une fonction dans `lib/status/`, une ligne dans `loadStatus`, et si besoin une RPC (voir ci-dessus).
 
+## Stats d'usage
+
+- Table `dashboard_ouvertures` (migration 0004), une ligne par ouverture, écrite par `marquerOuvert` en plus de `dernier_ouvert`. Lecture publique, écriture service-role.
+- Calcul pur dans `lib/stats.ts` (jours calendaires de Paris). Lecture paginée par 1 000 lignes (limite PostgREST) dans `useJeux`.
+- Pas de « temps passé » : le jeu s'ouvre dans un autre onglet, rien ne permet de le mesurer honnêtement.
+
 ## Santé du portfolio
 
 - Colonne `dashboard_games.depot` (« propriétaire/dépôt », migration 0003), validée par `FORMAT_DEPOT` côté serveur.

@@ -16,10 +16,13 @@ function verdict(nom, { error }, attenduRefus) {
 const r = [
   verdict('lecture dashboard_games', await db.from('dashboard_games').select('id').limit(1), false),
   verdict('lecture dashboard_done', await db.from('dashboard_done').select('game_id').limit(1), false),
+  verdict('lecture dashboard_ouvertures', await db.from('dashboard_ouvertures').select('id').limit(1), false),
   verdict('lecture dashboard_push_subscriptions', await db.from('dashboard_push_subscriptions').select('id').limit(1), true),
   verdict('update dashboard_games', await db.from('dashboard_games').update({ notes: 'x' }).eq('id', FANTOME), true),
   verdict('delete dashboard_games', await db.from('dashboard_games').delete().eq('id', FANTOME), true),
   verdict('delete dashboard_done', await db.from('dashboard_done').delete().eq('game_id', FANTOME), true),
+  verdict('insert dashboard_ouvertures', await db.from('dashboard_ouvertures').insert({ game_id: FANTOME }), true),
+  verdict('delete dashboard_ouvertures', await db.from('dashboard_ouvertures').delete().eq('game_id', FANTOME), true),
   verdict('delete dashboard_push_subscriptions', await db.from('dashboard_push_subscriptions').delete().eq('id', FANTOME), true),
 ]
 process.exit(r.every(Boolean) ? 0 : 1)

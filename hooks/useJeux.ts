@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { Game } from '@/lib/supabase'
 import { jourDeCycle, maintenant } from '@/lib/time'
 import { categorieDe } from '@/lib/categories'
+import { statsUsage, type Ouverture } from '@/lib/stats'
 import {
   basculerFait as basculerFaitServeur,
   creerJeu,
@@ -15,11 +16,32 @@ import {
 import type { FormState } from '@/components/GameForm'
 import type { NotifFormState } from '@/components/NotifModal'
 
-type Lecture = { games: Game[] | null; doneMap: Record<string, string | null> | null }
+type Lecture = {
+  games: Game[] | null
+  doneMap: Record<string, string | null> | null
+  ouvertures: Ouverture[] | null
+}
+
+/** Supabase renvoie au plus 1 000 lignes par requête : on lit page par page. */
+const TAILLE_PAGE = 1000
+
+async function lireOuvertures(): Promise<Ouverture[] | null> {
+  const toutes: Ouverture[] = []
+  for (let debut = 0; ; debut += TAILLE_PAGE) {
+    const { data, error } = await supabase
+      .from('dashboard_ouvertures')
+      .select('game_id, opened_at')
+      .order('id', { ascending: true })
+      .range(debut, debut + TAILLE_PAGE - 1)
+    if (error || !data) return null
+    toutes.push(...(data as Ouverture[]))
+    if (data.length < TAILLE_PAGE) return toutes
+  }
+}
 
 /** Lit les jeux actifs et les coches. `null` : lecture échouée, on garde l'existant. */
 async function lire(): Promise<Lecture> {
-  const [gamesRes, doneRes] = await Promise.all([
+  const [gamesRes, doneRes, ouvertures] = await Promise.all([
     supabase
       .from('dashboard_games')
       .select('*')
@@ -27,6 +49,7 @@ async function lire(): Promise<Lecture> {
       .order('ordre', { ascending: true })
       .order('created_at', { ascending: true }),
     supabase.from('dashboard_done').select('game_id, done_at'),
+    lireOuvertures(),
   ])
 
   let doneMap: Record<string, string | null> | null = null
@@ -36,7 +59,7 @@ async function lire(): Promise<Lecture> {
       doneMap[r.game_id] = r.done_at
     }
   }
-  return { games: (gamesRes.data as Game[] | null) ?? null, doneMap }
+  return { games: (gamesRes.data as Game[] | null) ?? null, doneMap, ouvertures }
 }
 
 /**
@@ -55,10 +78,13 @@ export function useJeux() {
   const [loading, setLoading] = useState(true)
   // Feature B — coche "fait"
   const [doneMap, setDoneMap] = useState<Record<string, string | null>>({})
+  // Stats d'usage : une ligne par ouverture
+  const [ouvertures, setOuvertures] = useState<Ouverture[]>([])
 
-  function appliquer({ games, doneMap }: Lecture) {
+  function appliquer({ games, doneMap, ouvertures }: Lecture) {
     if (games) setGames(games)
     if (doneMap) setDoneMap(doneMap)
+    if (ouvertures) setOuvertures(ouvertures)
     setLoading(false)
   }
 
@@ -124,6 +150,7 @@ export function useJeux() {
   function marquerOuvert(game: Game) {
     const now = new Date().toISOString()
     setGames(prev => prev.map(g => g.id === game.id ? { ...g, dernier_ouvert: now } : g))
+    setOuvertures(prev => [...prev, { game_id: game.id, opened_at: now }])
     // Pas d'alerte ici : l'utilisateur vient de quitter l'onglet pour le jeu.
     marquerOuvertServeur(game.id).catch(err => console.error('dernier_ouvert non enregistré :', err))
   }
@@ -160,6 +187,7 @@ export function useJeux() {
   return {
     games,
     loading,
+    stats: statsUsage(ouvertures, maintenant()),
     estFait,
     surEchecEcriture,
     basculerFait,

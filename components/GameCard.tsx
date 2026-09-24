@@ -1,6 +1,7 @@
 import type { Game } from '@/lib/supabase'
 import type { GameStatus } from '@/lib/status/types'
 import StatusBadge from '@/components/StatusBadge'
+import type { StatsJeu } from '@/lib/stats'
 
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -19,6 +20,7 @@ function getDomain(url: string): string {
 type Props = {
   game: Game
   status: GameStatus | undefined
+  usage: StatsJeu | undefined
   done: boolean
   notesExpanded: boolean
   isDragged: boolean
@@ -39,6 +41,7 @@ type Props = {
 export default function GameCard({
   game,
   status,
+  usage,
   done,
   notesExpanded,
   isDragged,
@@ -141,10 +144,16 @@ export default function GameCard({
           </div>
         </div>
 
-        {/* Dernier ouvert */}
+        {/* Dernier ouvert + stats d'usage */}
         {game.dernier_ouvert && (
           <p className="text-slate-500 text-xs mt-2">
             Ouvert {formatRelativeTime(game.dernier_ouvert)}
+            {usage && (
+              <span title={`${usage.total} ouverture${usage.total > 1 ? 's' : ''} au total, ${usage.mois} sur 30 jours`}>
+                {' · '}{usage.semaine} sur 7 j
+                {usage.serie >= 2 && <> · 🔥 {usage.serie} j</>}
+              </span>
+            )}
           </p>
         )}
       </a>
