@@ -3,10 +3,9 @@
 import { useState } from 'react'
 import type { Game } from '@/lib/supabase'
 import { grouperParCategorie } from '@/lib/categories'
-import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
 import GameForm from '@/components/GameForm'
-import PushButton from '@/components/PushButton'
+import Entete from '@/components/Entete'
 import NotifModal from '@/components/NotifModal'
 import { useJeux } from '@/hooks/useJeux'
 import { useStatuts } from '@/hooks/useStatuts'
@@ -14,6 +13,10 @@ import { useModaleJeu } from '@/hooks/useModaleJeu'
 import { useModaleNotif } from '@/hooks/useModaleNotif'
 import { useGlisserDeposer } from '@/hooks/useGlisserDeposer'
 
+/**
+ * Page principale : assemble les hooks (hooks/) et les composants
+ * (components/). Ni requête ni écriture ici.
+ */
 export default function Home() {
   const jeux = useJeux()
   const { games, loading } = jeux
@@ -41,28 +44,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
-      <header className="flex items-center justify-between mb-10 max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight">🎲 Mes jeux</h1>
-        <div className="flex items-center gap-2">
-          {/* Feature C — bouton push */}
-          <PushButton />
-          <button
-            onClick={modaleJeu.ouvrirAjout}
-            className="bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-2 rounded-2xl font-semibold text-sm"
-          >
-            + Ajouter
-          </button>
-          <form action={seDeconnecter}>
-            <button
-              type="submit"
-              title="Se déconnecter"
-              className="bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-2xl text-sm text-slate-300"
-            >
-              ⎋
-            </button>
-          </form>
-        </div>
-      </header>
+      <Entete onAjouter={modaleJeu.ouvrirAjout} />
 
       <main className="max-w-6xl mx-auto">
         {loading ? (
