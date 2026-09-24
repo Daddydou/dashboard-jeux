@@ -4,23 +4,21 @@ import { useState } from 'react'
 import type { Game } from '@/lib/supabase'
 import { seDeconnecter } from './login/actions'
 import GameCard from '@/components/GameCard'
-import GameForm, { EMPTY_FORM, type FormState } from '@/components/GameForm'
+import GameForm from '@/components/GameForm'
 import PushButton from '@/components/PushButton'
 import NotifModal, { EMPTY_NOTIF_FORM, type NotifFormState } from '@/components/NotifModal'
 import { useJeux } from '@/hooks/useJeux'
 import { useStatuts } from '@/hooks/useStatuts'
+import { useModaleJeu } from '@/hooks/useModaleJeu'
 
 export default function Home() {
   const jeux = useJeux()
   const { games, loading } = jeux
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingGame, setEditingGame] = useState<Game | null>(null)
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [submitting, setSubmitting] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const { statuses, oublierStatut } = useStatuts(games)
+  const modaleJeu = useModaleJeu({ ...jeux, oublierStatut })
 
   // Feature C — notifications push
   const [notifModalGame, setNotifModalGame] = useState<Game | null>(null)
@@ -47,57 +45,9 @@ export default function Home() {
     setNotifModalGame(null)
   }
 
-  function openAdd() {
-    setEditingGame(null)
-    setForm(EMPTY_FORM)
-    setModalOpen(true)
-  }
-
-  function openEdit(game: Game) {
-    setEditingGame(game)
-    setForm({
-      nom: game.nom,
-      url: game.url,
-      description: game.description ?? '',
-      emoji: game.emoji ?? '',
-      categorie: game.categorie ?? '',
-      couleur: game.couleur ?? '#6366f1',
-      notes: game.notes ?? '',
-      source_type: game.source_type ?? '',
-      reset_heure: game.reset_heure ?? '',
-    })
-    setModalOpen(true)
-  }
-
   function handleDelete(game: Game) {
     if (!confirm(`Supprimer "${game.nom}" ?`)) return
     jeux.supprimer(game)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-
-    try {
-      if (editingGame) {
-        const prevSourceType = editingGame.source_type ?? ''
-        const nextSourceType = form.source_type
-        if (prevSourceType !== nextSourceType) {
-          oublierStatut(editingGame.id)
-        }
-  
-        await jeux.modifier(editingGame.id, form)
-      } else {
-        await jeux.ajouter(form)
-      }
-    } catch (err) {
-      setSubmitting(false)
-      jeux.surEchecEcriture(err)
-      return
-    }
-
-    setSubmitting(false)
-    setModalOpen(false)
   }
 
   function handleDrop(e: React.DragEvent, category: string, targetId: string) {
@@ -137,7 +87,7 @@ export default function Home() {
           {/* Feature C — bouton push */}
           <PushButton />
           <button
-            onClick={openAdd}
+            onClick={modaleJeu.ouvrirAjout}
             className="bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-2 rounded-2xl font-semibold text-sm"
           >
             + Ajouter
@@ -182,7 +132,7 @@ export default function Home() {
                     onDrop={e => handleDrop(e, cat, game.id)}
                     onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
                     onNotif={() => openNotifModal(game)}
-                    onEdit={() => openEdit(game)}
+                    onEdit={() => modaleJeu.ouvrirEdition(game)}
                     onDelete={() => handleDelete(game)}
                     onOpen={() => jeux.marquerOuvert(game)}
                     onCheck={checked => jeux.basculerFait(game, checked)}
@@ -196,14 +146,14 @@ export default function Home() {
       </main>
 
       {/* Modal ajout / édition */}
-      {modalOpen && (
+      {modaleJeu.modalOpen && (
         <GameForm
-          editing={editingGame !== null}
-          form={form}
-          setForm={setForm}
-          submitting={submitting}
-          onSubmit={handleSubmit}
-          onClose={() => setModalOpen(false)}
+          editing={modaleJeu.editing}
+          form={modaleJeu.form}
+          setForm={modaleJeu.setForm}
+          submitting={modaleJeu.submitting}
+          onSubmit={modaleJeu.enregistrer}
+          onClose={modaleJeu.fermer}
         />
       )}
 

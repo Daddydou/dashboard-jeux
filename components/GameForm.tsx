@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { Game } from '@/lib/supabase'
 
 export type FormState = {
   nom: string
@@ -24,6 +25,21 @@ export const EMPTY_FORM: FormState = {
   reset_heure: '',
 }
 
+/** Formulaire pré-rempli avec un jeu existant (édition). */
+export function jeuVersFormulaire(game: Game): FormState {
+  return {
+    nom: game.nom,
+    url: game.url,
+    description: game.description ?? '',
+    emoji: game.emoji ?? '',
+    categorie: game.categorie ?? '',
+    couleur: game.couleur ?? '#6366f1',
+    notes: game.notes ?? '',
+    source_type: game.source_type ?? '',
+    reset_heure: game.reset_heure ?? '',
+  }
+}
+
 type Props = {
   editing: boolean
   form: FormState
@@ -33,7 +49,7 @@ type Props = {
   onClose: () => void
 }
 
-/** Modale d'ajout / édition d'un jeu. L'état du formulaire vit dans la page. */
+/** Modale d'ajout / édition d'un jeu. L'état du formulaire vit dans hooks/useModaleJeu.ts. */
 export default function GameForm({ editing, form, setForm, submitting, onSubmit, onClose }: Props) {
   return (
     <div
