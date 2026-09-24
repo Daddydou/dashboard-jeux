@@ -3,6 +3,7 @@
 import { exigerSession } from '@/auth/garde'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { Game } from '@/lib/supabase'
+import { FORMAT_DEPOT, lireSanteDepot, type SanteDepot } from '@/lib/github'
 
 /**
  * Toutes les écritures du dashboard. Une Server Action est un endpoint POST
@@ -21,6 +22,7 @@ export type ChampsJeu = {
   notes: string
   source_type: string
   reset_heure: string
+  depot: string
 }
 
 export type ChampsNotif = {
@@ -59,6 +61,9 @@ function champsJeu(f: ChampsJeu) {
   if (!f || typeof f !== 'object') throw new Error('Formulaire invalide.')
   const url = obligatoire(f.url, 'URL')
   if (!/^https?:\/\//i.test(url)) throw new Error('URL invalide (http/https).')
+  // `?? ''` : un onglet resté ouvert sur l'ancienne version n'envoie pas ce champ.
+  const depot = optionnel(f.depot ?? '', 200)
+  if (depot !== null && !FORMAT_DEPOT.test(depot)) throw new Error('Dépôt GitHub invalide (propriétaire/dépôt).')
   return {
     nom: obligatoire(f.nom, 'Nom', 200),
     url,
@@ -69,6 +74,7 @@ function champsJeu(f: ChampsJeu) {
     notes: optionnel(f.notes, 10_000),
     source_type: optionnel(f.source_type, 64),
     reset_heure: optionnel(f.reset_heure, 8),
+    depot,
   }
 }
 
@@ -187,4 +193,32 @@ export async function basculerFait(gameId: string, fait: boolean): Promise<strin
     .upsert({ game_id: gid, done_at: doneAt }, { onConflict: 'game_id' })
   if (error) throw new Error(error.message)
   return doneAt
+}
+
+// --- Santé du portfolio (lecture) -------------------------------------------
+
+export type SanteJeu = { gameId: string; nom: string; sante: SanteDepot | null }
+
+/**
+ * Santé du dépôt GitHub de chaque jeu actif (`sante: null` : pas de dépôt,
+ * site externe). Server Action pour garder GITHUB_TOKEN côté serveur ;
+ * session exigée car elle révèle des infos de dépôts privés.
+ */
+export async function lireSantePortfolio(): Promise<SanteJeu[]> {
+  await exigerSession()
+  const { data, error } = await supabaseAdmin()
+    .from('dashboard_games')
+    .select('id, nom, depot')
+    .eq('actif', true)
+    .order('ordre', { ascending: true })
+  if (error) throw new Error(error.message)
+
+  const jeux = data as { id: string; nom: string; depot: string | null }[]
+  return Promise.all(
+    jeux.map(async j => ({
+      gameId: j.id,
+      nom: j.nom,
+      sante: j.depot ? await lireSanteDepot(j.depot) : null,
+    })),
+  )
 }

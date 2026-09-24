@@ -16,6 +16,8 @@ export type Game = {
   source_type: string | null
   // Feature B
   reset_heure: string | null
+  // Santé du portfolio : dépôt GitHub « propriétaire/dépôt »
+  depot: string | null
   // Feature C
   notif_active: boolean
   notif_debut: string | null

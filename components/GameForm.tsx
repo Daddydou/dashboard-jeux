@@ -11,6 +11,7 @@ export type FormState = {
   notes: string
   source_type: string
   reset_heure: string
+  depot: string
 }
 
 export const EMPTY_FORM: FormState = {
@@ -23,6 +24,7 @@ export const EMPTY_FORM: FormState = {
   notes: '',
   source_type: '',
   reset_heure: '',
+  depot: '',
 }
 
 /** Formulaire pré-rempli avec un jeu existant (édition). */
@@ -37,6 +39,7 @@ export function jeuVersFormulaire(game: Game): FormState {
     notes: game.notes ?? '',
     source_type: game.source_type ?? '',
     reset_heure: game.reset_heure ?? '',
+    depot: game.depot ?? '',
   }
 }
 
@@ -157,6 +160,19 @@ export default function GameForm({ editing, form, setForm, submitting, onSubmit,
               className="bg-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <span className="text-xs text-slate-600">Laisser vide = pas de reset automatique</span>
+          </label>
+
+          {/* Santé du portfolio — dépôt GitHub */}
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-slate-400">Dépôt GitHub</span>
+            <input
+              type="text"
+              value={form.depot}
+              onChange={e => setForm(f => ({ ...f, depot: e.target.value }))}
+              placeholder="ex: Daddydou/tvtfl"
+              className="bg-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <span className="text-xs text-slate-600">Laisser vide pour un site externe</span>
           </label>
 
           <div className="flex justify-end gap-3 pt-2">

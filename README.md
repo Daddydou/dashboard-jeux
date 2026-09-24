@@ -34,6 +34,7 @@ téléphone (PWA).
 | `hooks/useGlisserDeposer.ts` | Réorganisation des cartes par glisser-déposer |
 | `components/` | `Entete`, `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
 | `lib/categories.ts` | Regroupement et tri des jeux par catégorie |
+| `lib/github.ts` | Santé d'un dépôt GitHub (version de Next, dernier push, CLAUDE.md, README) |
 | `app/actions.ts` | Server Actions : toutes les écritures Supabase |
 | `app/login/` | Page et actions de connexion / déconnexion |
 | `auth/` | Cookie de session signé (`session.ts`) et garde serveur (`garde.ts`) |
@@ -90,6 +91,17 @@ bloquer le reste de la page.
 
 Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
 
+### Santé du portfolio (🩺)
+
+Le bouton 🩺 de l'en-tête liste, pour chaque jeu relié à un dépôt GitHub
+(champ « Dépôt GitHub » de la carte, ex. `Daddydou/tvtfl`) : la version de
+Next.js, la date du dernier push et la présence de `CLAUDE.md` / `README.md`.
+Une version de Next antérieure à 16 est signalée « à migrer ». Les sites
+externes (sans dépôt) affichent « — ».
+
+Lecture via l'API GitHub, côté serveur, mise en cache 1 h. Les dépôts
+privés demandent `GITHUB_TOKEN`.
+
 ### Ce qui vit en dehors de ce dépôt
 
 - **Supabase** (projet partagé avec mes autres apps) : les tables
@@ -116,6 +128,7 @@ Modèle commenté : `.env.example`.
 | `VAPID_PRIVATE_KEY` | Clé VAPID privée (envoi des push), **secrète** |
 | `VAPID_SUBJECT` | Contact VAPID, ex. `mailto:…` |
 | `CRON_SECRET` | Secret attendu dans l'en-tête `x-cron-secret` de la route cron |
+| `GITHUB_TOKEN` | Facultatif, **secret** : jeton GitHub en lecture seule pour la santé du portfolio (dépôts privés) |
 | `DASHBOARD_FAKE_NOW` | Facultatif, local uniquement : date simulée pour tester les notifications (ignorée en production) |
 
 > ⚠ Dans `.env.local`, Next remplace `$quelquechose` par une variable (vide).

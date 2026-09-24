@@ -49,6 +49,12 @@ Un jeu affiche un badge si son `source_type` est renseigné (liste déroulante �
 - Mon pseudo dans les apps CDM26 est dans `lib/constants.ts` (`MON_PSEUDO`), nulle part ailleurs.
 - Ajouter un badge : une option dans `GameForm`, une fonction dans `lib/status/`, une ligne dans `loadStatus`, et si besoin une RPC (voir ci-dessus).
 
+## Santé du portfolio
+
+- Colonne `dashboard_games.depot` (« propriétaire/dépôt », migration 0003), validée par `FORMAT_DEPOT` côté serveur.
+- `lib/github.ts` (`server-only`) lit l'API GitHub avec `GITHUB_TOKEN` (facultatif, jamais `NEXT_PUBLIC_`), cache 1 h ; `lireSantePortfolio()` (Server Action, session exigée) ; affichage `components/PanneauSante.tsx`.
+- Une erreur GitHub (privé sans jeton, quota, introuvable) s'affiche sur la ligne du jeu, jamais d'exception.
+
 ## Heure : toujours Europe/Paris
 
 - Tout passe par `lib/time.ts` : `maintenant()` (simulable avec `DASHBOARD_FAKE_NOW`, ignorée en production) et `partiesParis()`. Jamais `new Date().getHours()`, ni l'heure du serveur (UTC sur Vercel), ni celle du téléphone.
