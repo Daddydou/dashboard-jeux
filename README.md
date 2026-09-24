@@ -43,7 +43,7 @@ téléphone (PWA).
 | `lib/status/` | Statuts dynamiques CDM26 |
 | `lib/constants.ts` | Constantes partagées (pseudo CDM26) |
 | `lib/time.ts` | Heure de Paris : `maintenant()` (simulable) et `partiesParis()`, pour le cron comme pour la page |
-| `supabase/migrations/` | Politiques RLS (lecture seule pour la clé publique) |
+| `supabase/migrations/` | Politiques RLS (lecture seule pour la clé publique) et RPC des badges CDM26 |
 
 ### Sécurité, en bref
 
@@ -93,8 +93,9 @@ Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
 ### Ce qui vit en dehors de ce dépôt
 
 - **Supabase** (projet partagé avec mes autres apps) : les tables
-  `dashboard_*`, et les deux fonctions `get_dashboard_*` ci-dessus, créées
-  directement dans Supabase (leur SQL n'est dans aucun dépôt).
+  `dashboard_*`, et les fonctions `get_dashboard_*` ci-dessus, créées à la
+  main dans Supabase ; leur code est recopié dans
+  `supabase/migrations/0002_rpc_statuts_cdm26.sql` pour pouvoir les recréer.
 - **cron-job.org** : l'appel toutes les 5 minutes qui déclenche les
   notifications (voir plus bas). Sans lui, aucune notification ne part.
 - **Vercel** : l'hébergement et les variables d'environnement de production.

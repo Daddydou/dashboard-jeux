@@ -29,7 +29,8 @@ Le fonctionnement complet (notifications, variables d'environnement) est dans `R
 Quand un badge a besoin de données d'une autre app dont les tables ne sont pas lisibles par `anon`, on **n'ouvre pas les tables** : on appelle une fonction Postgres `SECURITY DEFINER` dédiée, qui ne renvoie que le strict nécessaire.
 
 - Existantes : `get_dashboard_picks_full(p_username)` (CDM26 Picks) et `get_dashboard_fantasy_status(p_display_name)` (CDM26 Fantasy). Elles renvoient du JSON (`{rank, total_points, next_match, match_date, picks_done}` / `{rank, points}`), ou `{error}` si le pseudo est introuvable.
-- ⚠ Leur SQL **n'est dans aucun dépôt** (créées directement dans Supabase, elles lisent les tables des apps CDM26). Ne pas les modifier ni les supprimer sans me demander. La requête en fin de `0001_rls_lecture_seule.sql` vérifie leur statut `security_definer`.
+- Leur SQL est copié tel quel depuis Supabase dans `supabase/migrations/0002_rpc_statuts_cdm26.sql` (elles avaient été créées à la main dans l'éditeur SQL ; elles lisent les tables des apps CDM26 : `cdm_*`, `fantasy_standings`). Ne pas les modifier ni les supprimer sans me demander. Une troisième, `get_dashboard_picks_status`, existe encore dans Supabase mais n'est plus utilisée.
+- Elles datent d'avant ce modèle : `search_path = 'public'` et volatilité par défaut (pas `stable`). À aligner si on les retouche un jour.
 - Pour en créer une nouvelle (toujours dans une migration de ce dépôt) :
   - nom `get_dashboard_<quoi>`, `language sql` ou `plpgsql`, **`stable`**, aucun `insert`/`update`/`delete` ;
   - `security definer set search_path = ''`, donc noms qualifiés (`public.ma_table`) ;
