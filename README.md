@@ -27,8 +27,13 @@ téléphone (PWA).
 
 | Chemin | Rôle |
 |---|---|
-| `app/page.tsx` | Page principale : état, chargement des jeux, écritures |
-| `components/` | `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
+| `app/page.tsx` | Page principale : assemble hooks et composants (ni requête ni écriture) |
+| `hooks/useJeux.ts` | Jeux et coches « Fait » : lecture Supabase, écritures optimistes, rechargement si refus |
+| `hooks/useStatuts.ts` | Statuts dynamiques (CDM26), chargés une fois par jeu |
+| `hooks/useModaleJeu.ts`, `useModaleNotif.ts` | État et enregistrement des deux modales |
+| `hooks/useGlisserDeposer.ts` | Réorganisation des cartes par glisser-déposer |
+| `components/` | `Entete`, `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
+| `lib/categories.ts` | Regroupement et tri des jeux par catégorie |
 | `app/actions.ts` | Server Actions : toutes les écritures Supabase |
 | `app/login/` | Page et actions de connexion / déconnexion |
 | `auth/` | Cookie de session signé (`session.ts`) et garde serveur (`garde.ts`) |
