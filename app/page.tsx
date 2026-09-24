@@ -11,29 +11,20 @@ import { useJeux } from '@/hooks/useJeux'
 import { useStatuts } from '@/hooks/useStatuts'
 import { useModaleJeu } from '@/hooks/useModaleJeu'
 import { useModaleNotif } from '@/hooks/useModaleNotif'
+import { useGlisserDeposer } from '@/hooks/useGlisserDeposer'
 
 export default function Home() {
   const jeux = useJeux()
   const { games, loading } = jeux
-  const [draggedId, setDraggedId] = useState<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const { statuses, oublierStatut } = useStatuts(games)
   const modaleJeu = useModaleJeu({ ...jeux, oublierStatut })
   const modaleNotif = useModaleNotif(jeux)
+  const glisser = useGlisserDeposer(jeux.deplacer)
 
   function handleDelete(game: Game) {
     if (!confirm(`Supprimer "${game.nom}" ?`)) return
     jeux.supprimer(game)
-  }
-
-  function handleDrop(e: React.DragEvent, category: string, targetId: string) {
-    e.preventDefault()
-    const deId = draggedId
-    setDraggedId(null)
-    setDragOverId(null)
-    if (!deId || deId === targetId) return
-    jeux.deplacer(category, deId, targetId)
   }
 
   function toggleNotes(gameId: string) {
@@ -102,12 +93,7 @@ export default function Home() {
                     status={statuses[game.id]}
                     done={jeux.estFait(game)}
                     notesExpanded={expandedNotes.has(game.id)}
-                    isDragged={draggedId === game.id}
-                    isDragOver={dragOverId === game.id}
-                    onDragStart={() => setDraggedId(game.id)}
-                    onDragOver={() => setDragOverId(game.id)}
-                    onDrop={e => handleDrop(e, cat, game.id)}
-                    onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
+                    {...glisser.propsCarte(game.id, cat)}
                     onNotif={() => modaleNotif.ouvrir(game)}
                     onEdit={() => modaleJeu.ouvrirEdition(game)}
                     onDelete={() => handleDelete(game)}
