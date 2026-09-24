@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -16,8 +16,17 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
  * Feature C — bouton d'abonnement aux notifications push.
  * Enregistre aussi le service worker (PWA) au montage.
  */
+/** Le navigateur sait-il recevoir des push ? Ne change pas en cours de route. */
+function pushDisponible(): boolean {
+  return 'serviceWorker' in navigator && 'PushManager' in window
+}
+const sansAbonnement = () => () => {}
+
 export default function PushButton() {
-  const [pushSupported, setPushSupported] = useState(false)
+  // Lu pendant le rendu plutôt que recopié dans un state depuis un effet.
+  // Côté serveur (pré-rendu), `false` : le bouton n'apparaît qu'une fois
+  // hydraté dans le navigateur, sans écart d'hydratation.
+  const pushSupported = useSyncExternalStore(sansAbonnement, pushDisponible, () => false)
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
 
@@ -26,7 +35,6 @@ export default function PushButton() {
     if (!('serviceWorker' in navigator)) return
     navigator.serviceWorker.register('/sw.js').catch(console.error)
     if ('PushManager' in window) {
-      setPushSupported(true)
       navigator.serviceWorker.ready
         .then(reg => reg.pushManager.getSubscription())
         .then(sub => setPushSubscribed(!!sub))

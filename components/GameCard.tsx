@@ -115,6 +115,10 @@ export default function GameCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 pr-14 mb-0.5">
               {domain && (
+                // <img> voulu : favicon externe de 20 px. next/image la ferait
+                // transiter par l'optimiseur d'images Vercel (quota, config
+                // remotePatterns) sans rien gagner à cette taille.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
                   alt=""

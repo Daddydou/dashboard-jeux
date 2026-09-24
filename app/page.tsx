@@ -48,8 +48,6 @@ export default function Home() {
   const [notifModalGame, setNotifModalGame] = useState<Game | null>(null)
   const [notifForm, setNotifForm] = useState<NotifFormState>(EMPTY_NOTIF_FORM)
 
-  useEffect(() => { loadGames() }, [])
-
   // Load statuses for games with source_type
   useEffect(() => {
     const todo = games.filter(g => g.source_type && !statusFetched.current.has(g.id))
@@ -94,6 +92,10 @@ export default function Home() {
     }
     setLoading(false)
   }
+
+  // Chargement initial. Placé après la déclaration de loadGames : le
+  // React Compiler refuse une fonction utilisée avant d'être déclarée.
+  useEffect(() => { loadGames() }, [])
 
   // Feature B — coche "fait" : valable jusqu'au prochain reset_heure, à
   // Paris (et non à l'heure du téléphone).
