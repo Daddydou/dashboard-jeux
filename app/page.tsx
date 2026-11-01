@@ -1,124 +1,111 @@
-'use client'
-
-import { useState } from 'react'
+import Link from 'next/link'
+import { Suspense } from 'react'
+import { pageProtegee } from '@/auth/pageProtegee'
+import AutoRefresh from '@/components/AutoRefresh'
+import CarteUne from '@/components/CarteUne'
+import { IconeReglages } from '@/components/icones'
+import Tuile from '@/components/Tuile'
+import { lireJeux } from '@/lib/donnees'
+import { chargerLive } from '@/lib/live'
+import { estSource } from '@/lib/live/types'
+import { jourEnToutesLettres } from '@/lib/relatif'
 import type { Game } from '@/lib/supabase'
-import { grouperParCategorie } from '@/lib/categories'
-import { correspond } from '@/lib/recherche'
-import GameCard from '@/components/GameCard'
-import GameForm from '@/components/GameForm'
-import Entete from '@/components/Entete'
-import NotifModal from '@/components/NotifModal'
-import BarreRecherche from '@/components/BarreRecherche'
-import PaletteCommandes from '@/components/PaletteCommandes'
-import { useJeux } from '@/hooks/useJeux'
-import { useStatuts } from '@/hooks/useStatuts'
-import { useModaleJeu } from '@/hooks/useModaleJeu'
-import { useModaleNotif } from '@/hooks/useModaleNotif'
-import { useGlisserDeposer } from '@/hooks/useGlisserDeposer'
+import { maintenant } from '@/lib/time'
 
-/**
- * Page principale : assemble les hooks (hooks/) et les composants
- * (components/). Ni requête ni écriture ici.
- */
-export default function Home() {
-  const jeux = useJeux()
-  const { games, loading } = jeux
-  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
-  const [filtre, setFiltre] = useState('')
-  const { statuses, oublierStatut } = useStatuts(games)
-  const modaleJeu = useModaleJeu({ ...jeux, oublierStatut })
-  const modaleNotif = useModaleNotif(jeux)
-  const glisser = useGlisserDeposer(jeux.deplacer)
+const PHRASES = ['Tout est à jour.', 'Une chose t’attend.', 'Deux choses t’attendent.', 'Trois choses t’attendent.']
 
-  function handleDelete(game: Game) {
-    if (!confirm(`Supprimer "${game.nom}" ?`)) return
-    jeux.supprimer(game)
-  }
-
-  function toggleNotes(gameId: string) {
-    setExpandedNotes(prev => {
-      const next = new Set(prev)
-      if (next.has(gameId)) next.delete(gameId)
-      else next.add(gameId)
-      return next
-    })
-  }
-
-  const affiches = games.filter(g => correspond(g, filtre))
-  const { categories, parCategorie } = grouperParCategorie(affiches)
+/** Les cartes « à la une », une fois leurs sources lues. */
+async function ALaUne({ jeux, now }: { jeux: Game[]; now: Date }) {
+  const resultats = await chargerLive(jeux, now)
+  const enAttente = jeux.filter(j => {
+    const ton = resultats[j.id]?.live?.ton
+    return ton === 'afaire' || ton === 'urgent'
+  }).length
+  const notes = jeux.map(j => resultats[j.id]?.note).filter((n): n is string => !!n)
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
-      <Entete onAjouter={modaleJeu.ouvrirAjout} />
-      {games.length > 0 && (
-        <BarreRecherche valeur={filtre} onChange={setFiltre} nbAffiches={affiches.length} nbTotal={games.length} />
+    <>
+      <h1 className="mt-1 text-balance font-display text-[34px] font-semibold leading-[1.05] md:text-5xl">
+        {PHRASES[enAttente] ?? `${enAttente} choses t’attendent.`}
+      </h1>
+      <section aria-label="À la une" className="mt-6 grid gap-3 lg:grid-cols-3">
+        {jeux.map(j => (
+          <CarteUne key={j.id} jeu={j} resultat={resultats[j.id]} />
+        ))}
+      </section>
+      {notes.length > 0 && (
+        <ul className="mt-3 text-sm text-brume">
+          {notes.map(n => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
       )}
+    </>
+  )
+}
 
-      <main className="max-w-6xl mx-auto">
-        {loading ? (
-          <p className="text-slate-400 text-center py-20">Chargement…</p>
-        ) : games.length === 0 ? (
-          <p className="text-slate-400 text-center py-20">
-            Aucun jeu — clique sur + Ajouter !
-          </p>
-        ) : affiches.length === 0 ? (
-          <p className="text-slate-400 text-center py-20">
-            Aucun jeu ne correspond à « {filtre} ».
-          </p>
-        ) : (
-          categories.map(cat => (
-            <section key={cat} className="mb-10">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">
-                {cat}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {parCategorie[cat].map(game => (
-                  <GameCard
-                    key={game.id}
-                    game={game}
-                    status={statuses[game.id]}
-                    usage={jeux.stats[game.id]}
-                    done={jeux.estFait(game)}
-                    notesExpanded={expandedNotes.has(game.id)}
-                    {...glisser.propsCarte(game.id, cat)}
-                    onNotif={() => modaleNotif.ouvrir(game)}
-                    onEdit={() => modaleJeu.ouvrirEdition(game)}
-                    onDelete={() => handleDelete(game)}
-                    onOpen={() => jeux.marquerOuvert(game)}
-                    onCheck={checked => jeux.basculerFait(game, checked)}
-                    onToggleNotes={() => toggleNotes(game.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))
-        )}
-      </main>
-
-      <PaletteCommandes games={games} onOuvrir={jeux.marquerOuvert} />
-
-      {/* Modal ajout / édition */}
-      {modaleJeu.modalOpen && (
-        <GameForm
-          editing={modaleJeu.editing}
-          form={modaleJeu.form}
-          setForm={modaleJeu.setForm}
-          submitting={modaleJeu.submitting}
-          onSubmit={modaleJeu.enregistrer}
-          onClose={modaleJeu.fermer}
-        />
-      )}
-
-      {/* Feature C — Modale notifications par jeu */}
-      {modaleNotif.jeu && (
-        <NotifModal
-          gameName={modaleNotif.jeu.nom}
-          form={modaleNotif.form}
-          setForm={modaleNotif.setForm}
-          onSave={modaleNotif.enregistrer}
-          onClose={modaleNotif.fermer}
-        />
-      )}
+function Attente({ n }: { n: number }) {
+  return (
+    <div aria-busy="true" aria-label="Chargement des statuts">
+      <div className="mt-2 h-9 w-2/3 animate-pulse rounded-xl bg-tableau" />
+      <div className="mt-6 grid gap-3 lg:grid-cols-3">
+        {Array.from({ length: n }, (_, i) => (
+          <div key={i} className="h-[196px] animate-pulse rounded-[28px] bg-tableau" />
+        ))}
+      </div>
     </div>
+  )
+}
+
+export default async function Accueil() {
+  await pageProtegee()
+  const now = maintenant()
+  const jeux = await lireJeux()
+  const une = jeux.filter(j => estSource(j.source_type))
+  const autres = jeux.filter(j => !estSource(j.source_type))
+
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+1.25rem)] md:px-8 md:pt-10">
+      <AutoRefresh />
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-[15px] text-brume">{jourEnToutesLettres(now)}</p>
+        <Link
+          href="/reglages"
+          aria-label="Réglages"
+          className="-mr-2 grid h-11 w-11 place-items-center rounded-full text-brume transition-colors hover:bg-tableau hover:text-craie"
+        >
+          <IconeReglages className="h-6 w-6" />
+        </Link>
+      </div>
+
+      {jeux.length === 0 ? (
+        <div className="mt-10 rounded-[28px] bg-tableau p-6">
+          <h1 className="font-display text-3xl font-semibold">Aucun jeu pour l’instant</h1>
+          <p className="mt-2 text-brume">Ajoute tes jeux dans les réglages pour les retrouver ici.</p>
+          <Link href="/reglages" className="mt-5 inline-flex h-12 items-center rounded-2xl bg-craie px-5 font-semibold text-nuit">
+            Ajouter un jeu
+          </Link>
+        </div>
+      ) : une.length > 0 ? (
+        <Suspense fallback={<Attente n={une.length} />}>
+          <ALaUne jeux={une} now={now} />
+        </Suspense>
+      ) : (
+        <h1 className="mt-1 font-display text-[34px] font-semibold leading-tight">Mes jeux</h1>
+      )}
+
+      {autres.length > 0 && (
+        <section aria-labelledby="autres" className="mt-9">
+          <h2 id="autres" className="mb-3 font-display text-xl font-semibold text-brume">
+            Autres jeux
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {autres.map(j => (
+              <Tuile key={j.id} jeu={j} />
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
   )
 }

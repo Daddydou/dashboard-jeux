@@ -1,11 +1,14 @@
 {
   "name": "Mes jeux",
   "short_name": "Jeux",
-  "description": "Dashboard perso de jeux et apps web",
+  "description": "Mes jeux, et ce qui m'attend ce soir.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#020617",
+  "orientation": "portrait",
+  "lang": "fr",
+  "background_color": "#0F141B",
+  "theme_color": "#0F141B",
   "icons": [
     {
       "src": "/icon-192.png",

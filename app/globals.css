@@ -3,18 +3,50 @@
 @tailwind utilities;
 
 :root {
-  --background: #020617;
-  --foreground: #f1f5f9;
+  color-scheme: dark;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #0f141b;
+  color: #eef2f6;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid #dcf44a;
+  outline-offset: 3px;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Matières des cartes « à la une ». */
+  .surface-dur {
+    background: radial-gradient(120% 140% at 100% 0%, #2d65b8 0%, #2559a6 45%, #1c4888 100%);
+  }
+  .surface-gazon {
+    background-color: #3a7638;
+    background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 34px, transparent 34px 68px);
+  }
+  .surface-parquet {
+    background-color: #9c5627;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.13) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 9px, transparent 9px 18px),
+      linear-gradient(180deg, #a65d2b, #8a4a1f);
+  }
+  .surface-unie {
+    background: #222c3a;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

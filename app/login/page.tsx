@@ -1,55 +1,46 @@
-import { redirect } from 'next/navigation';
-import { seConnecter } from './actions';
-import { sessionValide } from '@/auth/garde';
+import { redirect } from 'next/navigation'
+import { seConnecter } from './actions'
+import { sessionValide } from '@/auth/garde'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
-export default async function LoginPage(
-  props: {
-    searchParams: Promise<{ next?: string; erreur?: string }>;
-  }
-) {
-  const searchParams = await props.searchParams;
-  // Le proxy laisse /login passer sans cookie : c'est ici qu'on renvoie
-  // un visiteur déjà connecté vers l'app.
-  if (await sessionValide()) redirect('/');
-
-  const { next, erreur } = searchParams;
+export default async function LoginPage(props: { searchParams: Promise<{ next?: string; erreur?: string }> }) {
+  const { next, erreur } = await props.searchParams
+  // Le proxy laisse /login passer sans cookie : c'est ici qu'on renvoie un
+  // visiteur déjà connecté vers l'app.
+  if (await sessionValide()) redirect('/')
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      <div className="mx-auto max-w-xs space-y-4 py-16">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">🎲 Accès privé</h1>
-          <p className="text-sm text-slate-400">
-            Ce dashboard est personnel. Mot de passe requis.
-          </p>
-        </div>
-
-        <form action={seConnecter} className="space-y-3">
-          <input type="hidden" name="next" value={next ?? ''} />
-          <input
-            type="password"
-            name="motDePasse"
-            placeholder="Mot de passe"
-            autoFocus
-            autoComplete="current-password"
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-          />
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-2 rounded-2xl font-semibold text-sm"
-          >
-            Entrer
-          </button>
-        </form>
-
-        {erreur && (
-          <p className="rounded-xl bg-red-950 border border-red-900 p-2 text-sm text-red-200">
-            Mot de passe incorrect.
-          </p>
-        )}
+    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
+      <div>
+        <h1 className="font-display text-4xl font-semibold">Mes jeux</h1>
+        <p className="mt-1 text-brume">Cette page est personnelle. Entre ton mot de passe.</p>
       </div>
-    </div>
-  );
+
+      <form action={seConnecter} className="flex flex-col gap-3">
+        <input type="hidden" name="next" value={next ?? ''} />
+        <label htmlFor="mdp" className="sr-only">
+          Mot de passe
+        </label>
+        <input
+          id="mdp"
+          type="password"
+          name="motDePasse"
+          placeholder="Mot de passe"
+          autoFocus
+          autoComplete="current-password"
+          className="h-12 w-full rounded-2xl border border-white/10 bg-tableau px-4 text-base text-craie placeholder:text-brume/60"
+        />
+        <button type="submit" className="h-12 rounded-2xl bg-balle text-base font-semibold text-nuit">
+          Entrer
+        </button>
+      </form>
+
+      {erreur && (
+        <p role="alert" className="rounded-xl bg-carton/15 px-3 py-2.5 text-sm text-carton">
+          Mot de passe incorrect.
+        </p>
+      )}
+    </main>
+  )
 }

@@ -1,85 +1,52 @@
 # Dashboard Jeux — contexte pour Claude Code
 
-Lanceur de mes applis-jeux, mono-utilisateur. Next.js 16 (App Router, React 19), Supabase, PWA, web-push, déployé sur Vercel.
-Le fonctionnement complet (notifications, variables d'environnement) est dans `README.md`.
+Mes jeux sur un seul écran, pensé téléphone d'abord. Next.js 16 (App Router, React 19), Tailwind 3, Supabase, PWA, web-push, Vercel (déploiement automatique à chaque push sur `main`).
+Version 3 (novembre 2026), réécrite de zéro. Fonctionnement détaillé : `README.md`.
 
 ## Commandes
 
 - `npm run dev` · `npm run build` · `npm run lint` · `npx tsc --noEmit`
-- `node --env-file=.env.local scripts/verif-rls.mjs` : vérifie que la clé publique ne peut que lire (non destructif).
-- Pas de tests automatiques : après un changement d'UI, vérifier dans le navigateur (build de production en local).
+- `node --env-file=.env.local scripts/verif-rls.mjs` : vérifie que la clé publique ne peut que lire.
+- Après un changement d'UI : lancer `npm run dev` et regarder en largeur téléphone (375 px) et ordinateur. En `next start` local la connexion échoue : le cookie est `secure` en production.
+
+## Écrans
+
+- `/` Accueil : les jeux « à la une » (ceux qui ont un `source_type`) en grandes cartes avec leur statut en direct, puis les autres jeux en tuiles. Rafraîchi toutes les 60 s (`AutoRefresh`).
+- `/reglages` : ordre des jeux, fiche d'un jeu (`FeuilleJeu`), rappels push, statut des sources, déconnexion.
+- Chaque page appelle `pageProtegee()` ; une lecture de `dashboard_games` qui échoue lève (`lib/donnees.ts`) → `app/error.tsx`.
+
+## Cartes « à la une » (`lib/live/`)
+
+- Contrat : `Live` dans `lib/live/types.ts` (ton, contexte, titre, chiffre, lignes, échéance, lien). Textes prêts à afficher, calculés côté serveur avec un `now` passé en argument.
+- Sources (`SOURCES`) : `gametracker` (Pick + Bracket), `optipick` (Opti-Pick, app tennis), `ttfl` (TTFL Pick). `chargerLive()` les lit en parallèle avec 7 s de délai ; une panne devient une note, jamais une exception.
+- `gametracker.ts` : API Game Tracker en **GET uniquement**, clé `GAMETRACKER_PICKS_KEY` (secrète, jamais affichée ni journalisée), cache 60 s. Sans clé : repli sur `tn_bracket_externe_tournois`.
+- `optipick.ts` : tables `tn_*` (lecture publique, clé anon). Mes picks = `tn_picks` sans `participant_id`.
+- `ttfl.ts` : tables `ttfl_*` privées, **lues** avec la clé service-role côté serveur (colonnes minimales, aucune écriture).
+- Matière des cartes : dur bleu (Game Tracker), gazon (Opti-Pick), parquet (TTFL), dans `components/CarteUne.tsx` et `components/Terrain.tsx`.
 
 ## Supabase partagé
 
-- Le projet Supabase `ubnkuwyqclrjckogldlc` est **partagé** avec mes autres apps (tvtfl, ttfl, ligue1, cdm26, tennis…).
-- Les objets de ce projet sont préfixés `dashboard_` (tables `dashboard_games`, `dashboard_done`, `dashboard_push_subscriptions`) et `get_dashboard_` (fonctions). Ne jamais modifier, supprimer ou altérer un objet sans ce préfixe.
-- Migrations SQL idempotentes, numérotées, dans `supabase/migrations/` (`create or replace`, `if not exists`, rejouables).
+- Projet `ubnkuwyqclrjckogldlc` **partagé** avec mes autres apps. Ce dashboard n'écrit que dans les objets préfixés `dashboard_` ; il lit `tn_*` et `ttfl_*` sans jamais y écrire.
+- Migrations SQL idempotentes et numérotées dans `supabase/migrations/`. Me montrer le SQL avant de l'appliquer.
+- Retirer un jeu = `actif = false` (rien n'est effacé).
 
-## Sécurité : lecture publique, écriture serveur
+## Sécurité
 
-- Le navigateur **lit** avec la clé publique (anon) ; la RLS n'autorise que `select` sur `dashboard_games` et `dashboard_done`, rien sur `dashboard_push_subscriptions` (migration `0001_rls_lecture_seule.sql`).
-- **Jamais d'écriture Supabase depuis le navigateur.** Toute écriture est une Server Action de `app/actions.ts` (ou une route `/api`) qui appelle `exigerSession()` / `sessionValide()` (`auth/garde.ts`) **puis** valide ses arguments, avant d'écrire avec `supabaseAdmin()` (clé service-role, `server-only`).
-- Le proxy (`proxy.ts`) ne suffit pas : une Server Action est un POST vers la page qui l'héberge. La garde dans chaque action est la vraie protection.
-- Connexion par mot de passe unique (`APP_PASSWORD`) et cookie `dj_session` signé HMAC-SHA256 (`AUTH_SECRET`), même schéma que Tennis App (`auth/session.ts`, Web Crypto).
-- `/api/cron/send-notifications` est exclue du proxy et protégée par l'en-tête `x-cron-secret` (`CRON_SECRET`) ; cron-job.org l'appelle toutes les 5 min.
-- Jamais de clé secrète préfixée `NEXT_PUBLIC_`. Ne jamais commiter `.env*` (sauf `.env.example`, sans valeurs).
-
-## RPC `SECURITY DEFINER` (lecture seule)
-
-Quand un badge a besoin de données d'une autre app dont les tables ne sont pas lisibles par `anon`, on **n'ouvre pas les tables** : on appelle une fonction Postgres `SECURITY DEFINER` dédiée, qui ne renvoie que le strict nécessaire.
-
-- Existantes : `get_dashboard_picks_full(p_username)` (CDM26 Picks) et `get_dashboard_fantasy_status(p_display_name)` (CDM26 Fantasy). Elles renvoient du JSON (`{rank, total_points, next_match, match_date, picks_done}` / `{rank, points}`), ou `{error}` si le pseudo est introuvable.
-- Leur SQL est copié tel quel depuis Supabase dans `supabase/migrations/0002_rpc_statuts_cdm26.sql` (elles avaient été créées à la main dans l'éditeur SQL ; elles lisent les tables des apps CDM26 : `cdm_*`, `fantasy_standings`). Ne pas les modifier ni les supprimer sans me demander. Une troisième, `get_dashboard_picks_status`, existe encore dans Supabase mais n'est plus utilisée.
-- Elles datent d'avant ce modèle : `search_path = 'public'` et volatilité par défaut (pas `stable`). À aligner si on les retouche un jour.
-- Pour en créer une nouvelle (toujours dans une migration de ce dépôt) :
-  - nom `get_dashboard_<quoi>`, `language sql` ou `plpgsql`, **`stable`**, aucun `insert`/`update`/`delete` ;
-  - `security definer set search_path = ''`, donc noms qualifiés (`public.ma_table`) ;
-  - renvoie uniquement les champs affichés, jamais une ligne complète ni l'historique ;
-  - `revoke all on function … from public;` puis `grant execute on function … to anon, authenticated;` ;
-  - c'est le modèle repris par `mes-agents` (`get_ttfl_pick_du_jour`).
-
-## Badges de statut
-
-Un jeu affiche un badge si son `source_type` est renseigné (liste déroulante « Statut dynamique » de `components/GameForm.tsx`).
-
-- Chaîne : `source_type` → `loadStatus()` dans `hooks/useStatuts.ts` → une fonction `lib/status/<source>.ts` qui appelle la RPC → un `GameStatus` (`lib/status/types.ts`) → `components/StatusBadge.tsx`.
-- `GameStatus` : `loading` (point clignotant), `ok` (vert), `warn` (orange, action à faire), `error` (affiche « — »).
-- Une fonction de statut **ne lève jamais** : toute erreur (réseau, RPC, `{error}`) devient `{ state: 'error' }`. Un badge cassé ne doit jamais casser la page.
-- Chargé une seule fois par jeu ; `oublierStatut(id)` force le rechargement (fait automatiquement quand le `source_type` change).
-- Mon pseudo dans les apps CDM26 est dans `lib/constants.ts` (`MON_PSEUDO`), nulle part ailleurs.
-- Ajouter un badge : une option dans `GameForm`, une fonction dans `lib/status/`, une ligne dans `loadStatus`, et si besoin une RPC (voir ci-dessus).
-
-## Boîte de rappels
-
-- Une source = un fichier `lib/rappels/<app>.ts` (`server-only`) qui renvoie un `ResultatSource` (`{ rappels, note? }`) et **ne lève jamais** : une panne devient une note.
-- `lireRappels()` (Server Action, session exigée) interroge les sources en parallèle (`Promise.allSettled`) et trie : à faire d'abord, puis par échéance.
-- TVTFL passe par `tvtfl_dashboard_badge(p_token)` avec `TVTFL_DASHBOARD_TOKEN` (secret, serveur uniquement) ; TTFL par `get_ttfl_pick_du_jour` (clé publique).
-- Rien n'est stocké ; « Marquer vu » est un confort local (`localStorage`). Pas de push pour ces rappels (choix de Daddy).
-- Ajouter une source : un fichier dans `lib/rappels/`, une ligne dans `lireRappels`, et `source` dans le type `Rappel`.
-
-## Stats d'usage
-
-- Table `dashboard_ouvertures` (migration 0004), une ligne par ouverture, écrite par `marquerOuvert` en plus de `dernier_ouvert`. Lecture publique, écriture service-role.
-- Calcul pur dans `lib/stats.ts` (jours calendaires de Paris). Lecture paginée par 1 000 lignes (limite PostgREST) dans `useJeux`.
-- Pas de « temps passé » : le jeu s'ouvre dans un autre onglet, rien ne permet de le mesurer honnêtement.
-
-## Santé du portfolio
-
-- Colonne `dashboard_games.depot` (« propriétaire/dépôt », migration 0003), validée par `FORMAT_DEPOT` côté serveur.
-- `lib/github.ts` (`server-only`) lit l'API GitHub avec `GITHUB_TOKEN` (facultatif, jamais `NEXT_PUBLIC_`), cache 1 h ; `lireSantePortfolio()` (Server Action, session exigée) ; affichage `components/PanneauSante.tsx`.
-- Une erreur GitHub (privé sans jeton, quota, introuvable) s'affiche sur la ligne du jeu, jamais d'exception.
+- Le navigateur n'écrit jamais dans Supabase. Toute écriture est une Server Action de `actions/jeux.ts` : `exigerSession()`, puis validation (`actions/validation.ts`), puis `supabaseAdmin()`. Une action renvoie `{ ok, erreur }`, elle ne lève pas.
+- Le proxy (`proxy.ts`) ne fait que rediriger : la garde dans chaque action et chaque page est la vraie protection.
+- Mot de passe unique (`APP_PASSWORD`) + cookie `dj_session` signé HMAC-SHA256 (`AUTH_SECRET`).
+- `/api/cron/send-notifications` : exclue du proxy, protégée par `x-cron-secret` (`CRON_SECRET`), appelée toutes les 5 min par cron-job.org.
+- Jamais de secret préfixé `NEXT_PUBLIC_`. Jamais commiter `.env*` (sauf `.env.example`).
 
 ## Heure : toujours Europe/Paris
 
-- Tout passe par `lib/time.ts` : `maintenant()` (simulable avec `DASHBOARD_FAKE_NOW`, ignorée en production) et `partiesParis()`. Jamais `new Date().getHours()`, ni l'heure du serveur (UTC sur Vercel), ni celle du téléphone.
-- Le cron n'envoie qu'**après** l'heure choisie (fenêtre de 15 min). Anti-doublon : 12 h (quotidien), 6 j 12 h (hebdo).
-- La coche « Fait » est valable jusqu'au prochain `reset_heure` (`jourDeCycle`).
+- Tout passe par `lib/time.ts` (`maintenant()`, `partiesParis()`) et `lib/relatif.ts`. Jamais l'heure du serveur (UTC) ni celle du téléphone.
 
-## Organisation du front
+## Front
 
-- `app/page.tsx` ne fait qu'assembler : l'état et la logique vivent dans `hooks/` (`useJeux`, `useStatuts`, `useModaleJeu`, `useModaleNotif`, `useGlisserDeposer`), l'affichage dans `components/`.
-- Écritures optimistes : `useJeux` met l'écran à jour tout de suite ; si le serveur refuse, `surEchecEcriture` prévient et recharge depuis la base.
-- Next 16 : pas de `next lint` (supprimé), `cookies()`/`headers()` sont async, `searchParams` est une Promise, `proxy.ts` remplace `middleware.ts`. Le React Compiler (ESLint) interdit un `setState` synchrone dans un `useEffect`.
+- Pages = composants serveur. Composants clients seulement pour l'interaction : `ListeJeux`, `FeuilleJeu`, `BoutonPush`, `AutoRefresh`, `EnregistrerSW`.
+- Next 16 : `proxy.ts`, `cookies()` async, `searchParams` Promise, pas de `next lint`. React Compiler (ESLint) : pas de `setState` synchrone dans un `useEffect`, pas d'appel impur dans le rendu.
+- Polices : Barlow et Barlow Condensed (`next/font/google`). Couleurs dans `tailwind.config.ts`.
 
 ## Je suis débutant
 

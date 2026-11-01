@@ -1,210 +1,83 @@
-# 🎲 Dashboard jeux
+# Mes jeux
 
-Lanceur personnel de mes applis-jeux (fantasy, pronostics, échecs, tennis…).
-Une page, une carte par jeu, rangées par catégorie :
+Mes jeux sur un seul écran, pensé pour le téléphone : ce qui m'attend ce
+soir sur mes jeux principaux, et un raccourci vers tous les autres.
+Mono-utilisateur, protégé par un mot de passe, installable (PWA).
 
-- **lien direct** vers le jeu, avec la date de dernière ouverture ;
-- **coche « Fait »** qui se réinitialise toute seule chaque jour à une heure
-  choisie par jeu ;
-- **notes / mémo** par jeu (room code, identifiant, phase…) ;
-- **statut dynamique** pour certains jeux (classement et picks à faire sur
-  CDM26 Picks / CDM26 Fantasy) ;
-- **rappels par notification push**, à heure fixe, quotidiens ou hebdo ;
-- réorganisation des cartes par **glisser-déposer**.
+## L'accueil
 
-Outil mono-utilisateur, protégé par un mot de passe unique. Installable sur
-téléphone (PWA).
+Les jeux **à la une** ont une grande carte, peinte dans la matière de leur
+terrain, avec leur statut en direct. Un appui ouvre directement le bon écran.
 
-## Stack
+| Jeu | Ce que montre la carte | D'où vient l'info |
+|---|---|---|
+| Pick + Bracket | Tournoi et tour ouverts, mes picks posés (ex. 2/2), heure de verrou, classement | API Game Tracker (lecture seule, clé `GAMETRACKER_PICKS_KEY`) |
+| Opti-Pick | Tour en cours de chaque tournoi, picks préparés dans mon plan ; ouvre l'écran Picks du bon tournoi | Tables `tn_*` de l'app tennis |
+| TTFL Pick | Pick du soir et sa projection, heure du match, saisie du robot sur les comptes (échecs signalés en rouge) | Tables `ttfl_*` (moteur + robot) |
 
-- **Next.js 16** (App Router, Turbopack) + **React 19**, TypeScript, Tailwind CSS
-- **Supabase** (Postgres) pour les données
-- **PWA** : `public/manifest.json` + service worker `public/sw.js` (réception des push)
-- **web-push** (clés VAPID) pour envoyer les notifications
-- Déploiement sur **Vercel** ; déclenchement des notifications par **cron-job.org**
+Pastille en haut à droite : **À faire** (jaune balle), **Urgent** (rouge :
+moins de 2 h, ou un échec du robot), **À jour**. La phrase du haut compte ce
+qui m'attend.
 
-## Organisation du code
+Les autres jeux (Chess, MPP, Zip, Hub Laki…) sont en tuiles : un appui ouvre
+le site.
+
+## Les réglages
+
+- **Mes jeux** : ordre (flèches), fiche d'un jeu (nom, adresse, icône,
+  couleur, « à la une », note, rappel), ajout, retrait (le jeu est seulement
+  désactivé en base, rien n'est effacé).
+- **Rappels** : activer les notifications sur l'appareil ; un rappel par jeu,
+  à heure fixe, chaque jour ou chaque semaine, avec dates de début et de fin.
+- **Statuts en direct** : ce que chaque carte sait lire, et si la clé Game
+  Tracker manque.
+
+## Code
 
 | Chemin | Rôle |
 |---|---|
-| `app/page.tsx` | Page principale : assemble hooks et composants (ni requête ni écriture) |
-| `hooks/useJeux.ts` | Jeux et coches « Fait » : lecture Supabase, écritures optimistes, rechargement si refus |
-| `hooks/useStatuts.ts` | Statuts dynamiques (CDM26), chargés une fois par jeu |
-| `hooks/useModaleJeu.ts`, `useModaleNotif.ts` | État et enregistrement des deux modales |
-| `hooks/useGlisserDeposer.ts` | Réorganisation des cartes par glisser-déposer |
-| `components/` | `Entete`, `GameCard`, `GameForm`, `NotifModal`, `StatusBadge`, `PushButton` |
-| `lib/categories.ts` | Regroupement et tri des jeux par catégorie |
-| `lib/recherche.ts` | Recherche sans accents (filtre et lanceur Ctrl+K) |
-| `lib/stats.ts` | Stats d'usage par jeu (7 j, 30 j, total, série), en jours de Paris |
-| `lib/rappels/` | Sources de la boîte de rappels (TVTFL, TTFL), une par fichier |
-| `lib/github.ts` | Santé d'un dépôt GitHub (version de Next, dernier push, CLAUDE.md, README) |
-| `app/actions.ts` | Server Actions : toutes les écritures Supabase |
-| `app/login/` | Page et actions de connexion / déconnexion |
-| `auth/` | Cookie de session signé (`session.ts`) et garde serveur (`garde.ts`) |
-| `proxy.ts` | Redirige vers `/login` sans session (ex-`middleware.ts`) |
-| `app/api/push/subscribe` | Enregistre l'abonnement push d'un appareil |
-| `app/api/cron/send-notifications` | Envoie les notifications dues (voir plus bas) |
-| `lib/status/` | Statuts dynamiques CDM26 |
-| `lib/constants.ts` | Constantes partagées (pseudo CDM26) |
-| `lib/time.ts` | Heure de Paris : `maintenant()` (simulable) et `partiesParis()`, pour le cron comme pour la page |
-| `supabase/migrations/` | Politiques RLS (lecture seule pour la clé publique) et RPC des badges CDM26 |
-
-### Sécurité, en bref
-
-- Le navigateur **lit** Supabase avec la clé publique (anon), mais **n'écrit
-  jamais** : la RLS le lui interdit.
-- Toutes les écritures passent par des Server Actions qui vérifient la session
-  (`sessionValide()`) puis utilisent la clé service-role côté serveur.
-- `node --env-file=.env.local scripts/verif-rls.mjs` vérifie que la clé
-  publique ne peut que lire (script non destructif).
-
-## Fonctionnement
-
-### Une carte = un jeu
-
-- **Clic sur la carte** : ouvre le jeu dans un nouvel onglet et enregistre
-  l'ouverture. La carte affiche la dernière ouverture (« il y a 2 h »), le
-  nombre d'ouvertures sur 7 jours et la série de jours consécutifs (🔥,
-  à partir de 2 jours) ; le total et les 30 jours sont au survol.
-  Historique dans `dashboard_ouvertures` (depuis le 24/09/2026). Le temps
-  passé dans un jeu n'est pas mesurable (il s'ouvre dans un autre onglet).
-- **Ctrl+K** (⌘K) : lanceur au clavier pour ouvrir un jeu ; la barre de
-  filtre sous l'en-tête restreint les cartes affichées.
-- **Coche « Fait »** : je coche quand j'ai joué. Si le jeu a une *heure de
-  reset* (ex. 06:00), la coche se décoche toute seule chaque jour à cette
-  heure-là, **heure de Paris**. Sans heure de reset, elle reste cochée.
-- **Notes** : un mémo libre par jeu (room code, identifiant…), dépliable.
-- **Glisser-déposer** : réordonne les cartes à l'intérieur d'une catégorie.
-- Les catégories sont triées par ordre alphabétique ; un jeu sans catégorie
-  va dans « Autres », toujours en dernier.
-
-Chaque action met l'écran à jour tout de suite, puis l'enregistre côté
-serveur. Si le serveur refuse (session expirée…), une alerte prévient et
-les données sont rechargées depuis la base.
-
-### Badges de statut
-
-Certains jeux affichent un badge calculé en direct depuis l'app du jeu. On
-le choisit dans « Statut dynamique » en éditant la carte :
-
-| Statut dynamique | Affiche | Source (fonction Supabase) |
-|---|---|---|
-| CDM26 Picks | classement et points, puis ✅ À jour / ⚠️ Picks à faire / ✅ Aucun match | `get_dashboard_picks_full` |
-| CDM26 Fantasy | classement et points | `get_dashboard_fantasy_status` |
-
-Les tables des apps CDM26 ne sont pas lisibles avec la clé publique. Le
-dashboard appelle donc des **fonctions `SECURITY DEFINER` en lecture
-seule**, qui ne renvoient que ces quelques chiffres pour mon pseudo
-(`lib/constants.ts`). En cas de problème, le badge affiche « — » sans
-bloquer le reste de la page.
-
-Ajouter un badge : voir la section « Badges de statut » de `CLAUDE.md`.
-
-### Boîte de rappels (📬)
-
-Le bouton 📬 de l'en-tête regroupe les rappels des apps connectées, avec
-un compteur de ce qui reste à faire :
-
-| Source | Rappel | Fonction Supabase |
-|---|---|---|
-| TVTFL | pick du prochain deck à faire / fait, avec l'heure de fermeture | `tvtfl_dashboard_badge` (jeton `TVTFL_DASHBOARD_TOKEN`) |
-| TTFL | pick du soir recommandé par le moteur (mes-agents) | `get_ttfl_pick_du_jour` |
-
-Couleur selon l'échéance : rouge à moins de 2 h, orange à moins de 24 h.
-« Marquer vu » retire un rappel du compteur sur cet appareil. Rien n'est
-stocké : les rappels sont recalculés à chaque ouverture, côté serveur (le
-jeton TVTFL est secret). Une source en panne affiche une note sans bloquer
-les autres. Pas de notification push pour ces rappels.
-
-### Santé du portfolio (🩺)
-
-Le bouton 🩺 de l'en-tête liste, pour chaque jeu relié à un dépôt GitHub
-(champ « Dépôt GitHub » de la carte, ex. `Daddydou/tvtfl`) : la version de
-Next.js, la date du dernier push et la présence de `CLAUDE.md` / `README.md`.
-Une version de Next antérieure à 16 est signalée « à migrer ». Un jeu sans
-dépôt renseigné (ex. un site externe) affiche « — ».
-
-Lecture via l'API GitHub, côté serveur, mise en cache 1 h. Les dépôts
-privés demandent `GITHUB_TOKEN`.
-
-### Ce qui vit en dehors de ce dépôt
-
-- **Supabase** (projet partagé avec mes autres apps) : les tables
-  `dashboard_*`, et les fonctions `get_dashboard_*` ci-dessus, créées à la
-  main dans Supabase ; leur code est recopié dans
-  `supabase/migrations/0002_rpc_statuts_cdm26.sql` pour pouvoir les recréer.
-- **cron-job.org** : l'appel toutes les 5 minutes qui déclenche les
-  notifications (voir plus bas). Sans lui, aucune notification ne part.
-- **Vercel** : l'hébergement et les variables d'environnement de production.
+| `app/page.tsx` | Accueil |
+| `app/reglages/page.tsx` | Réglages |
+| `lib/live/` | Statut en direct de chaque jeu à la une (un fichier par source) |
+| `components/CarteUne.tsx`, `Terrain.tsx`, `Tuile.tsx` | Cartes de l'accueil |
+| `components/ListeJeux.tsx`, `FeuilleJeu.tsx`, `BoutonPush.tsx` | Réglages |
+| `actions/` | Server Actions (toutes les écritures) et leur validation |
+| `auth/`, `proxy.ts` | Mot de passe, cookie signé, gardes |
+| `app/api/push/subscribe`, `app/api/cron/send-notifications` | Abonnement push et envoi des rappels |
+| `lib/time.ts`, `lib/relatif.ts` | Heure de Paris et dates en français |
+| `public/sw.js` | Service worker : push + mode hors connexion |
 
 ## Variables d'environnement
 
-À mettre dans `.env.local` en local, et dans les réglages du projet sur Vercel.
-Modèle commenté : `.env.example`.
+Modèle commenté : `.env.example`. Sur Vercel : Settings → Environment Variables.
 
 | Variable | Rôle |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL du projet Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (lecture seule) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur Supabase, **secrète**, pour les écritures |
-| `APP_PASSWORD` | Mot de passe d'accès à l'app (obligatoire) |
-| `AUTH_SECRET` | Clé de signature du cookie de session (recommandée) |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Clé VAPID publique (abonnement push) |
-| `VAPID_PRIVATE_KEY` | Clé VAPID privée (envoi des push), **secrète** |
-| `VAPID_SUBJECT` | Contact VAPID, ex. `mailto:…` |
-| `CRON_SECRET` | Secret attendu dans l'en-tête `x-cron-secret` de la route cron |
-| `TVTFL_DASHBOARD_TOKEN` | Facultatif, **secret** : jeton du badge TVTFL pour la boîte de rappels |
-| `GITHUB_TOKEN` | Facultatif, **secret** : jeton GitHub en lecture seule pour la santé du portfolio (dépôts privés) |
-| `DASHBOARD_FAKE_NOW` | Facultatif, local uniquement : date simulée pour tester les notifications (ignorée en production) |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase, lecture |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Secret** : écritures, et lecture des tables TTFL |
+| `APP_PASSWORD`, `AUTH_SECRET` | Connexion |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Notifications push |
+| `CRON_SECRET` | Protège la route cron |
+| `GAMETRACKER_PICKS_KEY` | **Secret**, facultatif : statut détaillé de Pick + Bracket |
+| `DASHBOARD_FAKE_NOW` | Local uniquement : heure simulée pour tester les rappels |
 
-> ⚠ Dans `.env.local`, Next remplace `$quelquechose` par une variable (vide).
-> Une valeur qui commence par `$` (ex. un mot de passe) est donc lue vide en
-> local. Choisir des valeurs sans `$`. Sur Vercel, pas ce problème.
+## Rappels push
 
-Clés VAPID : `npx web-push generate-vapid-keys`.
+cron-job.org appelle toutes les 5 minutes `GET /api/cron/send-notifications`
+avec l'en-tête `x-cron-secret`. La route envoie les rappels dont l'heure
+(Paris) est passée depuis moins de 15 minutes, une seule fois par jour (ou
+par semaine), à tous les appareils abonnés.
+
+```bash
+curl -H "x-cron-secret: <CRON_SECRET>" https://dashboard-jeux.vercel.app/api/cron/send-notifications
+```
 
 ## Commandes
 
-Node.js ≥ 20.9 requis.
-
 ```bash
 npm install
-npm run dev      # serveur de développement sur http://localhost:3000
-npm run build    # build de production
-npm run start    # lance le build de production
-npm run lint     # ESLint (next lint n'existe plus en Next 16)
-npx tsc --noEmit # vérification des types
-```
-
-## Notifications push
-
-1. **Abonnement** : sur un appareil, le bouton « 🔔 Notifs » de l'en-tête
-   demande l'autorisation, puis envoie l'abonnement à `/api/push/subscribe`,
-   qui le stocke dans `dashboard_push_subscriptions`.
-2. **Réglage par jeu** : le bouton 🔔 d'une carte règle l'heure d'envoi, la
-   fréquence (quotidien / hebdo) et une période de début / fin facultative.
-3. **Envoi** : cron-job.org appelle toutes les 5 minutes
-   `GET /api/cron/send-notifications` avec l'en-tête
-   `x-cron-secret: <CRON_SECRET>`. Sans le bon secret, la route répond 401.
-   Elle est exclue du proxy (pas besoin de session). À chaque appel, la route :
-   - calcule l'heure **à Paris** via `lib/time.ts` (le serveur Vercel tourne
-     en UTC) ;
-   - garde les jeux dont les notifications sont actives, dans leur période,
-     et dont l'heure d'envoi est passée depuis **moins de 15 minutes** :
-     jamais d'envoi en avance, et un appel du cron en retard envoie quand
-     même (un rappel de 23:58 part bien à 00:03) ;
-   - saute un jeu déjà notifié depuis moins de 12 h (quotidien) ou 6 j 12 h
-     (hebdo) : deux appels rapprochés n'envoient donc pas deux fois, et un
-     rappel hebdo revient tous les 7 jours, le même jour que le premier
-     envoi ;
-   - envoie la notification à tous les appareils abonnés, et supprime ceux
-     qui n'existent plus (réponse 404 / 410) ;
-   - répond `{"sent": <nombre de notifications envoyées>}`.
-4. **Réception** : `public/sw.js` affiche la notification ; un clic ouvre le
-   jeu (ou remet son onglet au premier plan).
-
-Tester à la main (en local ou en production) :
-
-```bash
-curl -H "x-cron-secret: <CRON_SECRET>" https://<domaine>/api/cron/send-notifications
+npm run dev      # http://localhost:3000
+npm run build
+npm run lint
+npx tsc --noEmit
 ```
