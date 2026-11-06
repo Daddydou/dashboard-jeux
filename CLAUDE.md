@@ -21,7 +21,7 @@ Version 3 (novembre 2026), réécrite de zéro. Fonctionnement détaillé : `REA
 - Sources (`SOURCES`) : `gametracker` (Pick + Bracket), `optipick` (Opti-Pick, app tennis), `ttfl` (TTFL Pick). `chargerLive()` les lit en parallèle avec 7 s de délai ; une panne devient une note, jamais une exception.
 - `gametracker.ts` : API Game Tracker en **GET uniquement**, clé `GAMETRACKER_PICKS_KEY` (secrète, jamais affichée ni journalisée), cache 60 s. Sans clé : repli sur `tn_bracket_externe_tournois`.
 - `optipick.ts` : tables `tn_*` (lecture publique, clé anon). Mes picks = `tn_picks` sans `participant_id`.
-- `ttfl.ts` : tables `ttfl_*` privées, **lues** avec la clé service-role côté serveur (colonnes minimales, aucune écriture).
+- `ttfl.ts` : tables `ttfl_*` privées, **lues** avec la clé service-role côté serveur (colonnes minimales, aucune écriture). Soirée = date de New York. Compte 01 : `ttfl_picks` (pick réel) + `ttfl_projections` du dernier `ttfl_runs` de la soirée + `ttfl_envois` (saisie). Autres comptes : un envoi `confirme` = pick présent. Vainqueurs : `ttfl_vainqueurs_kt.cote` non nul = prono posé chez Thomas, comparé à `ttfl_vainqueurs_choix`.
 - Matière des cartes : dur bleu (Game Tracker), gazon (Opti-Pick), parquet (TTFL), dans `components/CarteUne.tsx` et `components/Terrain.tsx`.
 
 ## Supabase partagé

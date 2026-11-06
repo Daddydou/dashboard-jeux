@@ -13,7 +13,7 @@ terrain, avec leur statut en direct. Un appui ouvre directement le bon écran.
 |---|---|---|
 | Pick + Bracket | Tournoi et tour ouverts, mes picks posés (ex. 2/2), heure de verrou, classement | API Game Tracker (lecture seule, clé `GAMETRACKER_PICKS_KEY`) |
 | Opti-Pick | Tour en cours de chaque tournoi, picks préparés dans mon plan ; ouvre l'écran Picks du bon tournoi | Tables `tn_*` de l'app tennis |
-| TTFL Pick | Pick du soir et sa projection, heure du match, saisie du robot sur les comptes (échecs signalés en rouge) | Tables `ttfl_*` (moteur + robot) |
+| TTFL Pick | Soirée du jour (date de New York) : pick réel du compte 01, sa projection, l'heure du match et sa saisie sur le site ; pour les autres comptes, seulement si un pick est présent ; pronos vainqueurs de la prochaine soirée posés chez Thomas (et s'ils diffèrent de ton choix) ; dernier score du compte 01 | Tables `ttfl_*` (moteur, robot, vainqueurs) |
 
 Pastille en haut à droite : **À faire** (jaune balle), **Urgent** (rouge :
 moins de 2 h, ou un échec du robot), **À jour**. La phrase du haut compte ce

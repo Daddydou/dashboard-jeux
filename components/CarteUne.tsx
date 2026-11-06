@@ -71,26 +71,28 @@ export default function CarteUne({ jeu, resultat }: { jeu: Game; resultat: Resul
       </div>
 
       {live ? (
-        <div className="relative mt-auto flex items-end justify-between gap-4 pt-6">
-          <div className="min-w-0">
-            <p className="truncate text-[15px] text-white/75">{live.contexte}</p>
-            <p className="mt-0.5 text-balance font-display text-[28px] font-semibold leading-[1.05]">{live.titre}</p>
-            {live.lignes.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-0.5 text-[15px] text-white/85">
-                {live.lignes.map(l => (
-                  <li key={l.texte} className="flex gap-2">
-                    <Puce ton={l.ton} />
-                    <span className="min-w-0">{l.texte}</span>
-                  </li>
-                ))}
-              </ul>
+        <div className="relative mt-auto pt-6">
+          <div className="flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="truncate text-[15px] text-white/75">{live.contexte}</p>
+              <p className="mt-0.5 text-balance font-display text-[28px] font-semibold leading-[1.05]">{live.titre}</p>
+            </div>
+            {live.chiffre && (
+              <div className="shrink-0 text-right">
+                <p className="font-display text-[60px] font-bold leading-[0.82] tabular-nums">{live.chiffre.valeur}</p>
+                <p className="mt-1.5 text-xs text-white/70">{live.chiffre.legende}</p>
+              </div>
             )}
           </div>
-          {live.chiffre && (
-            <div className="shrink-0 text-right">
-              <p className="font-display text-[60px] font-bold leading-[0.82] tabular-nums">{live.chiffre.valeur}</p>
-              <p className="mt-1.5 text-xs text-white/70">{live.chiffre.legende}</p>
-            </div>
+          {live.lignes.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-0.5 text-[15px] text-white/85">
+              {live.lignes.map(l => (
+                <li key={l.texte} className="flex gap-2">
+                  <Puce ton={l.ton} />
+                  <span className="min-w-0">{l.texte}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       ) : (
