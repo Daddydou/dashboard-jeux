@@ -16,6 +16,17 @@ export type Ton = 'urgent' | 'afaire' | 'ok' | 'calme'
 
 export type Ligne = { texte: string; ton?: Ton }
 
+/** Une rangée par tournoi (ou par élément suivi) quand il y en a plusieurs en même temps. */
+export type Rangee = {
+  titre: string
+  detail: string
+  /** « 2/2 », à droite de la rangée. */
+  score?: string
+  ton: Ton
+  /** Lien direct vers cet élément (sinon : le lien de la carte). */
+  lien?: string
+}
+
 export type Live = {
   ton: Ton
   /** Contexte court : « Bercy · 32es ». */
@@ -26,6 +37,8 @@ export type Live = {
   chiffre?: { valeur: string; legende: string }
   /** Deux ou trois précisions, une par ligne. */
   lignes: Ligne[]
+  /** Plusieurs tournois en même temps : une rangée chacun, sous le titre. */
+  rangees?: Rangee[]
   /** « dans 1 h 12 » ou « à 23:10 », null si rien ne presse. */
   echeance: string | null
   /** Lien direct vers le bon écran du jeu (sinon : le site du jeu). */

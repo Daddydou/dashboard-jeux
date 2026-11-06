@@ -1,13 +1,17 @@
 import 'server-only'
 import { supabase } from '@/lib/supabase'
-import type { Ligne, ResultatLive } from './types'
+import type { Rangee, ResultatLive, Ton } from './types'
 import { libelleTour, nomCourt, origine, picksAttendus } from './tennis'
 
 /**
- * Opti-Pick (l'app tennis) : où en est mon plan de picks sur les tournois en
- * cours. Les tables tn_* sont en lecture publique : clé anon, rien d'autre.
- * Mes picks sont ceux sans participant (Laki et Thomas en ont un).
+ * Opti-Pick (l'app tennis) : où en est mon plan de picks sur CHACUN des
+ * tournois en cours. Les tables tn_* sont en lecture publique : clé anon,
+ * rien d'autre. Mes picks sont ceux sans participant (Laki et Thomas en ont un).
  */
+
+const MAX_TOURNOIS = 8
+
+const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
 type Tournoi = { id: string; name: string; rounds: string[] | null; start_date: string | null }
 type Match = { tournament_id: string; round: string; status: string }
@@ -28,7 +32,7 @@ export async function chargerOptiPick(urlJeu: string): Promise<ResultatLive> {
     .select('id, name, rounds, start_date')
     .eq('status', 'running')
     .order('start_date', { ascending: false })
-    .limit(4)
+    .limit(MAX_TOURNOIS)
   if (error) return { live: null, note: `Opti-Pick : ${error.message}` }
 
   const liste = (tournois ?? []) as Tournoi[]
@@ -67,30 +71,39 @@ export async function chargerOptiPick(urlJeu: string): Promise<ResultatLive> {
     return { live: { ton: 'calme', contexte: 'Tennis', titre: 'Tournois terminés', lignes: [], echeance: null } }
   }
 
-  // À la une : le premier tournoi où il manque des picks, sinon le plus récent.
-  const principal = etats.find(e => e.poses < e.attendus) ?? etats[0]
-  const manque = principal.poses < principal.attendus
-  const autres = etats.filter(e => e !== principal)
-
-  const lignes: Ligne[] = [{ texte: `Tournoi : ${principal.posesTotal}/${principal.attendusTotal} picks posés` }]
-  for (const e of autres.slice(0, 2)) {
-    const ok = e.poses >= e.attendus
-    lignes.push({
-      texte: `${nomCourt(e.tournoi.name)} · ${libelleTour(e.tour)} : ${e.poses}/${e.attendus}${ok ? ' ✓' : ''}`,
-      ton: ok ? 'ok' : 'afaire',
-    })
-  }
-
   const base = origine(urlJeu)
+  const lienDe = (e: Etat) => (base ? `${base}/tournoi/${e.tournoi.id}/picks` : undefined)
+
+  // À préparer d'abord, puis les tournois à jour.
+  etats.sort((a, b) => Number(a.poses >= a.attendus) - Number(b.poses >= b.attendus))
+  const rangees: Rangee[] = etats.map(e => {
+    const ok = e.poses >= e.attendus
+    return {
+      titre: nomCourt(e.tournoi.name),
+      detail: `${majuscule(libelleTour(e.tour))} · tournoi ${e.posesTotal}/${e.attendusTotal} picks`,
+      score: `${e.poses}/${e.attendus}`,
+      ton: (ok ? 'ok' : 'afaire') as Ton,
+      lien: lienDe(e),
+    }
+  })
+
+  const manque = etats.reduce((n, e) => n + Math.max(0, e.attendus - e.poses), 0)
+  const principal = etats[0]
+
   return {
     live: {
-      ton: manque || autres.some(e => e.poses < e.attendus) ? 'afaire' : 'ok',
-      contexte: `${nomCourt(principal.tournoi.name)} · ${libelleTour(principal.tour)}`,
-      titre: manque ? 'Picks du tour à préparer' : 'Plan à jour',
-      chiffre: { valeur: `${principal.poses}/${principal.attendus}`, legende: 'picks du tour' },
-      lignes,
+      ton: manque > 0 ? 'afaire' : 'ok',
+      contexte: etats.length > 1 ? `${etats.length} tournois en cours` : nomCourt(principal.tournoi.name),
+      titre:
+        manque > 0
+          ? `${manque} pick${manque > 1 ? 's' : ''} à préparer`
+          : etats.length > 1
+            ? 'Tous les plans sont à jour'
+            : 'Plan à jour',
+      lignes: [],
+      rangees,
       echeance: null,
-      lien: base ? `${base}/tournoi/${principal.tournoi.id}/picks` : undefined,
+      lien: lienDe(principal),
     },
   }
 }

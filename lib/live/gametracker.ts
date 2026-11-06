@@ -1,12 +1,12 @@
 import 'server-only'
 import { supabase } from '@/lib/supabase'
 import { echeanceCourte, horloge, nombreFr, presse, rangFr } from '@/lib/relatif'
-import type { Ligne, ResultatLive, Ton } from './types'
+import type { Rangee, ResultatLive, Ton } from './types'
 import { nomCourt } from './tennis'
 
 /**
- * Pick + Bracket (Game Tracker, l'app de Thomas) : mon pick du tour ouvert,
- * son heure de verrou et mon classement.
+ * Pick + Bracket (Game Tracker, l'app de Thomas) : pour CHAQUE tournoi en
+ * cours, mon pick du tour ouvert, son heure de verrou et mon classement.
  *
  * Source de vérité : l'API « picks tennis » de Game Tracker, en LECTURE
  * seule (GET), avec la clé GAMETRACKER_PICKS_KEY (la même que l'app tennis,
@@ -17,6 +17,7 @@ import { nomCourt } from './tennis'
 
 const BASE = 'https://bowling-tracker-phi.vercel.app/api/v1/tennis/picks'
 const DELAI_MS = 6000
+const MAX_TOURNOIS = 6
 
 type Objet = Record<string, unknown>
 const objet = (v: unknown): Objet | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Objet) : null)
@@ -24,7 +25,7 @@ const texte = (v: unknown): string | null => (typeof v === 'string' && v.trim() 
 const nombre = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
 type TourOuvert = { nom: string; lockAt: string | null }
-type TournoiGT = { id: string; nom: string; tourOuvert: TourOuvert | null }
+type TournoiGT = { id: string; nom: string; statut: string | null; tourOuvert: TourOuvert | null }
 type EtatGT = {
   tourOuvert: (TourOuvert & { attendus: number; poses: number }) | null
   moi: { rang: number | null; points: number } | null
@@ -64,7 +65,7 @@ function lireTournois(brut: unknown): TournoiGT[] {
     const o = objet(t)
     const id = o ? texte(o.id) : null
     const nom = o ? texte(o.nom) : null
-    return o && id && nom ? [{ id, nom, tourOuvert: lireTourOuvert(o.tourOuvert) }] : []
+    return o && id && nom ? [{ id, nom, statut: texte(o.statut), tourOuvert: lireTourOuvert(o.tourOuvert) }] : []
   })
 }
 
@@ -86,7 +87,34 @@ function lireEtat(brut: unknown): EtatGT {
   }
 }
 
-const temps = (iso: string | null) => (iso ? Date.parse(iso) : Infinity)
+/** Un tournoi terminé n'a plus rien à montrer. */
+const termine = (statut: string | null) => !!statut && /complet|termin|finish|clos|closed/i.test(statut)
+
+const temps = (iso: string | null | undefined) => (iso ? Date.parse(iso) : Infinity)
+
+type Suivi = { t: TournoiGT; etat: EtatGT | null }
+
+function rangeeDe({ t, etat }: Suivi, now: Date): Rangee & { manque: number; verrou: Date | null } {
+  const to = etat?.tourOuvert ?? null
+  const verrou = to?.lockAt ? new Date(to.lockAt) : t.tourOuvert?.lockAt ? new Date(t.tourOuvert.lockAt) : null
+  const manque = to ? Math.max(0, to.attendus - to.poses) : 0
+  let ton: Ton = !to ? 'calme' : manque > 0 ? 'afaire' : 'ok'
+  if (manque > 0 && presse(verrou, now)) ton = 'urgent'
+
+  const morceaux: string[] = []
+  morceaux.push(to?.nom ?? t.tourOuvert?.nom ?? 'aucun tour ouvert')
+  if (verrou && verrou.getTime() > now.getTime()) morceaux.push(`verrou ${echeanceCourte(verrou, now)}`)
+  if (etat?.moi) morceaux.push(`${etat.moi.rang ? rangFr(etat.moi.rang) : '—'} · ${nombreFr(etat.moi.points)} pts`)
+
+  return {
+    titre: nomCourt(t.nom),
+    detail: morceaux.join(' · '),
+    score: to ? `${to.poses}/${to.attendus}` : undefined,
+    ton,
+    manque,
+    verrou,
+  }
+}
 
 export async function chargerGameTracker(now: Date): Promise<ResultatLive> {
   if (!process.env.GAMETRACKER_PICKS_KEY) return repliBase()
@@ -99,13 +127,16 @@ export async function chargerGameTracker(now: Date): Promise<ResultatLive> {
     return { ...repli, note: `Pick + Bracket : ${e instanceof Error ? e.message : 'erreur'}, affichage limité.` }
   }
 
-  const ouverts = tournois.filter(t => t.tourOuvert).sort((a, b) => temps(a.tourOuvert!.lockAt) - temps(b.tourOuvert!.lockAt))
-  if (ouverts.length === 0) {
-    return { live: { ton: 'calme', contexte: 'Tennis', titre: 'Aucun tour ouvert aux picks', lignes: [], echeance: null } }
+  const enCours = tournois
+    .filter(t => !termine(t.statut))
+    .sort((a, b) => temps(a.tourOuvert?.lockAt) - temps(b.tourOuvert?.lockAt))
+    .slice(0, MAX_TOURNOIS)
+  if (enCours.length === 0) {
+    return { live: { ton: 'calme', contexte: 'Tennis', titre: 'Aucun tournoi en cours', lignes: [], echeance: null } }
   }
 
-  const etats = await Promise.all(
-    ouverts.slice(0, 3).map(async t => {
+  const suivis: Suivi[] = await Promise.all(
+    enCours.map(async t => {
       try {
         return { t, etat: lireEtat(await lire(`?tournoi=${encodeURIComponent(t.id)}`)) }
       } catch {
@@ -114,42 +145,36 @@ export async function chargerGameTracker(now: Date): Promise<ResultatLive> {
     }),
   )
 
-  const aFaire = (e: (typeof etats)[number]) => !!e.etat?.tourOuvert && e.etat.tourOuvert.poses < e.etat.tourOuvert.attendus
-  const principal = etats.find(aFaire) ?? etats[0]
-  const to = principal.etat?.tourOuvert ?? null
-  const verrou = to?.lockAt ? new Date(to.lockAt) : null
-  const manque = aFaire(principal)
+  const rangees = suivis.map(s => rangeeDe(s, now))
+  // À faire d'abord (le verrou le plus proche en tête), puis le reste.
+  const poids: Record<Ton, number> = { urgent: 0, afaire: 1, ok: 2, calme: 3 }
+  rangees.sort((a, b) => poids[a.ton] - poids[b.ton] || temps(a.verrou?.toISOString()) - temps(b.verrou?.toISOString()))
 
-  let ton: Ton = manque ? 'afaire' : 'ok'
-  if (manque && presse(verrou, now)) ton = 'urgent'
-  if (!to) ton = 'calme'
+  const manque = rangees.reduce((n, r) => n + r.manque, 0)
+  const ton = rangees.reduce<Ton>((pire, r) => (poids[r.ton] < poids[pire] ? r.ton : pire), 'calme')
+  const prochainVerrou = rangees.find(r => r.manque > 0 && r.verrou)?.verrou ?? null
+  const restant = prochainVerrou ? horloge(prochainVerrou, now) : null
+  const illisible = suivis.some(s => !s.etat)
 
-  const lignes: Ligne[] = []
-  if (verrou) lignes.push({ texte: `Verrou ${echeanceCourte(verrou, now)}` })
-  const moi = principal.etat?.moi
-  if (moi) lignes.push({ texte: `Classement : ${moi.rang ? rangFr(moi.rang) : '—'} · ${nombreFr(moi.points)} pts` })
-  for (const e of etats.filter(x => x !== principal).slice(0, 1)) {
-    const t2 = e.etat?.tourOuvert
-    if (t2) {
-      lignes.push({
-        texte: `${nomCourt(e.t.nom)} · ${t2.nom} : ${t2.poses}/${t2.attendus}${t2.poses >= t2.attendus ? ' ✓' : ''}`,
-        ton: t2.poses >= t2.attendus ? 'ok' : 'afaire',
-      })
-      if (t2.poses < t2.attendus && ton === 'ok') ton = 'afaire'
-    }
-  }
+  const titre =
+    manque > 0
+      ? `${manque} pick${manque > 1 ? 's' : ''} à poser`
+      : rangees.some(r => r.score)
+        ? enCours.length > 1
+          ? 'Tous tes picks sont posés'
+          : 'Pick posé'
+        : 'Aucun tour ouvert'
 
-  const restant = manque && verrou ? horloge(verrou, now) : null
   return {
     live: {
-      ton,
-      contexte: `${nomCourt(principal.t.nom)} · ${to?.nom ?? principal.t.tourOuvert?.nom ?? ''}`,
-      titre: !to ? 'Tour ouvert' : to.poses === 0 ? 'Ton pick est à poser' : manque ? 'Pick incomplet' : 'Pick posé',
-      chiffre: to ? { valeur: `${to.poses}/${to.attendus}`, legende: 'picks du tour' } : undefined,
-      lignes,
+      ton: ton === 'calme' && rangees.some(r => r.ton === 'ok') ? 'ok' : ton,
+      contexte: enCours.length > 1 ? `${enCours.length} tournois en cours` : rangees[0].titre,
+      titre,
+      lignes: [],
+      rangees: rangees.map(({ titre, detail, score, ton }) => ({ titre, detail, score, ton })),
       echeance: restant ? `dans ${restant}` : null,
     },
-    note: principal.etat ? undefined : 'Pick + Bracket : état du tournoi illisible.',
+    note: illisible ? 'Pick + Bracket : un tournoi n’a pas pu être lu.' : undefined,
   }
 }
 
@@ -160,22 +185,23 @@ async function repliBase(): Promise<ResultatLive> {
     .select('nom, statut, verrouille, lock_at')
     .in('statut', ['UPCOMING', 'ONGOING'])
     .order('lock_at', { ascending: true, nullsFirst: false })
-    .limit(3)
+    .limit(MAX_TOURNOIS)
   if (error) return { live: null, note: `Pick + Bracket : ${error.message}` }
   const liste = (data ?? []) as { nom: string; statut: string; verrouille: boolean; lock_at: string | null }[]
   if (liste.length === 0) {
     return { live: { ton: 'calme', contexte: 'Tennis', titre: 'Aucun tournoi ouvert', lignes: [], echeance: null } }
   }
-  const [premier, ...autres] = liste
   return {
     live: {
       ton: 'calme',
-      contexte: `${nomCourt(premier.nom)} · ${premier.statut === 'ONGOING' ? 'en cours' : 'à venir'}`,
-      titre: 'Ouvre le jeu pour voir ton pick',
-      lignes: [
-        ...autres.map(t => ({ texte: `${nomCourt(t.nom)} · ${t.statut === 'ONGOING' ? 'en cours' : 'à venir'}` })),
-        { texte: 'Statut détaillé : clé Game Tracker à ajouter' },
-      ],
+      contexte: liste.length > 1 ? `${liste.length} tournois` : nomCourt(liste[0].nom),
+      titre: 'Ouvre le jeu pour voir tes picks',
+      lignes: [{ texte: 'Statut détaillé : clé Game Tracker à ajouter' }],
+      rangees: liste.map(t => ({
+        titre: nomCourt(t.nom),
+        detail: t.statut === 'ONGOING' ? 'en cours' : 'à venir',
+        ton: 'calme' as Ton,
+      })),
       echeance: null,
     },
   }
